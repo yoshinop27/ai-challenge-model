@@ -1,4 +1,4 @@
-Development Workflow Documentation
+# Development Workflow Documentation
 
 This document outlines the standard workflow for completing and deploying a story.
 

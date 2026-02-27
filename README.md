@@ -30,14 +30,13 @@ Follow coding standards and project conventions.
 
 Add or update:
 
-Unit tests
-
-Integration tests (if applicable)
-
-Relevant documentation
+- Unit tests
+- Integration tests (if applicable)
+- Relevant documentation
 
 4. Create a Pull Request (PR)
 
+Open a Pull Request targeting the development branch.
 Push your feature branch to the remote repository.
 
 Open a Pull Request targeting the development branch.

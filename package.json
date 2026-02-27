@@ -1,0 +1,8 @@
+{
+  "name": "pi515",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npm run dev --prefix ai-challenge-model/frontend",
+    "i": "npm install --prefix ai-challenge-model/frontend"
+  }
+}

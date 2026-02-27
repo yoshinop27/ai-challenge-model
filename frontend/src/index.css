@@ -1,0 +1,90 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f0f0f;
+  color: #e8e8e8;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+/* Layout */
+.page { width: 100%; display: flex; justify-content: center; }
+
+.card {
+  width: 100%;
+  max-width: 600px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 2.5rem;
+}
+
+.card-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+.card-subtitle { color: #888; font-size: 0.95rem; margin-bottom: 2rem; }
+
+/* Form */
+.row { display: flex; gap: 1rem; }
+
+.field { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1.25rem; flex: 1; }
+.field-label { font-size: 0.875rem; font-weight: 500; color: #bbb; }
+.field-error { font-size: 0.78rem; color: #ef4444; }
+
+.input {
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  color: #e8e8e8;
+  font-size: 0.95rem;
+  outline: none;
+  width: 100%;
+}
+.input.error { border-color: #ef4444; }
+
+/* Drop zone */
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 2px dashed #333;
+  border-radius: 12px;
+  padding: 2.5rem 2rem;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: #111;
+}
+.dropzone.dragging { border-color: #6366f1; background: #1e1e2e; }
+.dropzone-icon { width: 2.25rem; height: 2.25rem; color: #555; margin-bottom: 0.25rem; }
+.dropzone-text { font-size: 0.95rem; color: #ccc; }
+.dropzone-hint { font-size: 0.78rem; color: #555; }
+
+/* File list */
+.file-list { list-style: none; margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.file-item { display: flex; align-items: center; background: #111; border: 1px solid #2a2a2a; border-radius: 8px; padding: 0.5rem 0.9rem; gap: 0.75rem; }
+.file-name { flex: 1; font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-size { font-size: 0.78rem; color: #666; white-space: nowrap; }
+.file-remove { background: none; border: none; color: #555; cursor: pointer; font-size: 0.85rem; padding: 0 0.25rem; line-height: 1; }
+
+/* Submit */
+.submit-btn {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.85rem;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}

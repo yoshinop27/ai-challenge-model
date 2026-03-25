@@ -1,8 +1,9 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from backend.model import SoilClassifier
 
 app = FastAPI(title="AI Challenge API")
+_classifier = SoilClassifier()
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,10 +18,8 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/upload")
-async def upload_files(files: List[UploadFile] = File(...)):
-    results = []
-    for f in files:
-        contents = await f.read()
-        results.append({"filename": f.filename, "size": len(contents), "content_type": f.content_type})
-    return {"uploaded": results}
+@app.post("/predict")
+async def predict(file: UploadFile = File(...)):
+    contents = await file.read()
+    return _classifier.predict(contents)
+

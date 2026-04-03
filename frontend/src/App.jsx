@@ -6,7 +6,7 @@ function formatSize(bytes) {
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`
 }
 
-function validate(fields, file) {
+function validate(fields, file, uploadType) {
   const errors = {}
   const farmSize = Number(fields.farmSize)
   const lat = Number(fields.lat)
@@ -22,7 +22,7 @@ function validate(fields, file) {
     errors.lng = 'Enter a valid longitude (-180 to 180)'
   }
   if (!file) {
-    errors.file = 'Upload a soil image'
+    errors.file = uploadType === 'tabular' ? 'Upload a CSV file' : 'Upload a soil image'
   }
 
   return errors
@@ -31,12 +31,20 @@ function validate(fields, file) {
 export default function App() {
   const [fields, setFields] = useState({ farmSize: '', lat: '', lng: '' })
   const [file, setFile] = useState(null)
+  const [uploadType, setUploadType] = useState('image')
   const [errors, setErrors] = useState({})
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
 
   const handleFieldChange = (name) => (event) => {
     setFields((current) => ({ ...current, [name]: event.target.value }))
+  }
+
+  const handleTypeChange = (event) => {
+    setUploadType(event.target.value)
+    setFile(null)
+    setResult(null)
+    setErrors({})
   }
 
   const handleFileChange = (event) => {
@@ -51,7 +59,7 @@ export default function App() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    const nextErrors = validate(fields, file)
+    const nextErrors = validate(fields, file, uploadType)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
@@ -60,8 +68,12 @@ export default function App() {
     try {
       const body = new FormData()
       body.append('file', file)
+      body.append('type', uploadType)
       const response = await fetch('http://localhost:8000/predict', { method: 'POST', body })
-      if (!response.ok) throw new Error(`Server error: ${response.status}`)
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || `Server error: ${response.status}`)
+      }
       setResult(await response.json())
     } catch (err) {
       setErrors({ submit: err.message })
@@ -70,11 +82,14 @@ export default function App() {
     }
   }
 
+  const fileAccept = uploadType === 'tabular' ? '.csv' : 'image/*'
+  const fileLabel = uploadType === 'tabular' ? 'Tabular Data (CSV)' : 'Soil Image'
+
   return (
     <div className="page">
       <div className="card">
         <h1 className="card-title">Farm Submission</h1>
-        <p className="card-subtitle">Provide your farm details and upload a soil image</p>
+        <p className="card-subtitle">Provide your farm details and upload a soil file</p>
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="field">
@@ -128,12 +143,38 @@ export default function App() {
           </div>
 
           <div className="field">
-            <label className="field-label" htmlFor="file">Soil Image</label>
+            <span className="field-label">Upload Type</span>
+            <div className="radio-group">
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="uploadType"
+                  value="image"
+                  checked={uploadType === 'image'}
+                  onChange={handleTypeChange}
+                />
+                Image
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="uploadType"
+                  value="tabular"
+                  checked={uploadType === 'tabular'}
+                  onChange={handleTypeChange}
+                />
+                Tabular Data (CSV)
+              </label>
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="field-label" htmlFor="file">{fileLabel}</label>
             <input
               id="file"
               className={`input${errors.file ? ' error' : ''}`}
               type="file"
-              accept="image/*"
+              accept={fileAccept}
               onChange={handleFileChange}
               aria-invalid={Boolean(errors.file)}
               aria-describedby={errors.file ? 'file-error' : undefined}

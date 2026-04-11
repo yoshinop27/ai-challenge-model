@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function SampleModal({ point, onResult, onClose }) {
+export default function SampleModal({ point, crops = [], onResult, onClose }) {
   const [uploadType, setUploadType] = useState('image')
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -22,6 +22,7 @@ export default function SampleModal({ point, onResult, onClose }) {
       const body = new FormData()
       body.append('file', file)
       body.append('type', uploadType)
+      if (crops.length > 0) body.append('crops', crops.join(','))
       const resp = await fetch('http://localhost:8000/predict', { method: 'POST', body })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
@@ -43,6 +44,9 @@ export default function SampleModal({ point, onResult, onClose }) {
             <p className="modal-coords">
               {point.lat.toFixed(5)}, {point.lng.toFixed(5)}
             </p>
+            {crops.length > 0 && (
+              <p className="modal-crops-hint">Analyzing for: {crops.join(', ')}</p>
+            )}
           </div>
           <button className="modal-close" onClick={onClose} disabled={loading}>×</button>
         </div>

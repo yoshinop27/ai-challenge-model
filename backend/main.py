@@ -41,8 +41,10 @@ def health() -> dict:
 async def predict(
     file: UploadFile = File(...),
     type: str = Form("image"),
+    crops: str = Form(""),
 ) -> dict:
     contents = await file.read()
+    crop_list = [c.strip() for c in crops.split(",") if c.strip()]
 
     if type == "tabular":
         try:
@@ -54,7 +56,7 @@ async def predict(
     try:
         top_confidence = result["confidence"][result["label"]] * 100
         result["recommendations"] = await asyncio.to_thread(
-            get_crop_recommendations, result["label"], top_confidence
+            get_crop_recommendations, result["label"], top_confidence, crop_list
         )
     except Exception:
         result["recommendations"] = None

@@ -41,10 +41,20 @@ function buildPopupHtml(sample, color) {
     .join('')
 
   const rec = sample.result.recommendations
-  const recHtml = rec
-    ? `<div class="popup-section">
-        <p class="popup-summary">${escapeHtml(rec.summary)}</p>
-        <div class="popup-crops">
+  let recHtml = ''
+  if (rec) {
+    const cropsHtml = rec.mode === 'targeted'
+      ? `<div class="popup-crop-analysis">
+          ${rec.crop_analysis.map((item) => `
+            <div class="popup-analysis-row">
+              <span class="popup-analysis-indicator ${item.suitable ? 'good' : 'avoid'}">${item.suitable ? '✓' : '✗'}</span>
+              <div class="popup-analysis-detail">
+                <span class="popup-analysis-crop">${escapeHtml(item.crop)}</span>
+                <span class="popup-analysis-reason">${escapeHtml(item.reason)}</span>
+              </div>
+            </div>`).join('')}
+        </div>`
+      : `<div class="popup-crops">
           <div class="popup-crop-col">
             <span class="popup-crop-title good">Good Crops</span>
             ${rec.good_crops.map((c) => `<span class="popup-crop-tag good">${escapeHtml(c)}</span>`).join('')}
@@ -53,10 +63,14 @@ function buildPopupHtml(sample, color) {
             <span class="popup-crop-title avoid">Avoid</span>
             ${rec.avoid_crops.map((c) => `<span class="popup-crop-tag avoid">${escapeHtml(c)}</span>`).join('')}
           </div>
-        </div>
-        <p class="popup-tip">${escapeHtml(rec.tip)}</p>
-      </div>`
-    : ''
+        </div>`
+
+    recHtml = `<div class="popup-section">
+      <p class="popup-summary">${escapeHtml(rec.summary)}</p>
+      ${cropsHtml}
+      <p class="popup-tip">${escapeHtml(rec.tip)}</p>
+    </div>`
+  }
 
   return `<div class="marker-popup">
     <span class="popup-label" style="color:${escapeHtml(color)}">${escapeHtml(sample.result.label)}</span>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import FarmMap from './components/FarmMap'
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -85,11 +86,21 @@ export default function App() {
   const fileAccept = uploadType === 'tabular' ? '.csv' : 'image/*'
   const fileLabel = uploadType === 'tabular' ? 'Tabular Data (CSV)' : 'Soil Image'
 
+  const parsedLat = Number(fields.lat)
+  const parsedLng = Number(fields.lng)
+  const showMap = fields.lat && fields.lng &&
+    !Number.isNaN(parsedLat) && !Number.isNaN(parsedLng) &&
+    Math.abs(parsedLat) <= 90 && Math.abs(parsedLng) <= 180
+
   return (
     <div className="page">
       <div className="card">
         <h1 className="card-title">Farm Submission</h1>
         <p className="card-subtitle">Provide your farm details and upload a soil file</p>
+
+        {showMap && (
+          <FarmMap lat={parsedLat} lng={parsedLng} />
+        )}
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="field">

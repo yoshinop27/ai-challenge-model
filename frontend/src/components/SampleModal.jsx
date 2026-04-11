@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 export default function SampleModal({ point, crops = [], onResult, onClose }) {
+  const cardRef = useRef(null)
   const [uploadType, setUploadType] = useState('image')
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -35,9 +36,15 @@ export default function SampleModal({ point, crops = [], onResult, onClose }) {
     }
   }
 
+  const handleOverlayClick = (e) => {
+    if (!loading && cardRef.current && !cardRef.current.contains(e.target)) {
+      onClose()
+    }
+  }
+
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-card">
+    <div className="modal-overlay" onClick={handleOverlayClick}>
+      <div className="modal-card" ref={cardRef}>
         <div className="modal-header">
           <div>
             <h2 className="modal-title">Add Soil Sample</h2>

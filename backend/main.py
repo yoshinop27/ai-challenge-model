@@ -13,7 +13,7 @@ if _env_path.is_file():
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from backend.model import SoilClassifier
-from backend.llm import predict_tabular
+from backend.llm import predict_tabular, get_crop_recommendations
 
 app = FastAPI(title="AI Challenge API")
 _classifier = SoilClassifier()
@@ -44,4 +44,10 @@ async def predict(
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
-    return _classifier.predict(contents)
+    result = _classifier.predict(contents)
+    try:
+        top_confidence = result["confidence"][result["label"]] * 100
+        result["recommendations"] = get_crop_recommendations(result["label"], top_confidence)
+    except Exception:
+        result["recommendations"] = None
+    return result

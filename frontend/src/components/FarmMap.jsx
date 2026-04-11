@@ -85,6 +85,7 @@ export default function FarmMap({ farm, samples, onMapClick }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef({})
+  const openPopupRef = useRef(null)
 
   useEffect(() => {
     const map = new mapboxgl.Map({
@@ -98,6 +99,11 @@ export default function FarmMap({ farm, samples, onMapClick }) {
     map.getCanvas().style.cursor = 'crosshair'
 
     map.on('click', (e) => {
+      // Close any open popup first, then open the sample modal
+      if (openPopupRef.current) {
+        openPopupRef.current.remove()
+        openPopupRef.current = null
+      }
       onMapClick(e.lngLat.lat, e.lngLat.lng)
     })
 
@@ -107,6 +113,7 @@ export default function FarmMap({ farm, samples, onMapClick }) {
       map.remove()
       mapRef.current = null
       markersRef.current = {}
+      openPopupRef.current = null
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -120,8 +127,6 @@ export default function FarmMap({ farm, samples, onMapClick }) {
       const color = getSoilColor(sample.result.label)
       const el = makeMarkerEl(color)
 
-      el.addEventListener('click', (e) => e.stopPropagation())
-
       const popup = new mapboxgl.Popup({
         offset: 20,
         maxWidth: '280px',
@@ -133,10 +138,13 @@ export default function FarmMap({ farm, samples, onMapClick }) {
         .setLngLat([sample.lng, sample.lat])
         .addTo(map)
 
-      el.addEventListener('mouseenter', () =>
+      el.addEventListener('click', (e) => {
+        e.stopPropagation() // don't fire map click / open modal
+        if (openPopupRef.current === popup) return // already open
+        openPopupRef.current?.remove()
         popup.addTo(map).setLngLat([sample.lng, sample.lat])
-      )
-      el.addEventListener('mouseleave', () => popup.remove())
+        openPopupRef.current = popup
+      })
 
       markersRef.current[sample.id] = { marker }
     })

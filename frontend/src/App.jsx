@@ -201,7 +201,7 @@ export default function App() {
 
         {result && (
           <div className="result">
-            <h2 className="result-label">Soil Quality: <strong>{result.label.toUpperCase()}</strong></h2>
+            <h2 className="result-label">Soil Type: <strong>{result.label.toUpperCase()}</strong></h2>
             <ul className="confidence-list">
               {Object.entries(result.confidence).map(([label, score]) => (
                 <li key={label} className="confidence-item">

@@ -75,18 +75,27 @@ export default function FarmMap({ farm, samples, onMapClick }) {
       el.addEventListener('click', (e) => e.stopPropagation())
 
       const confidence = (sample.result.confidence[sample.result.label] * 100).toFixed(1)
-      const popup = new mapboxgl.Popup({ offset: 20, maxWidth: '220px' }).setHTML(`
-        <div class="marker-popup">
-          <span class="popup-label" style="color:${color}">${sample.result.label}</span>
-          <span class="popup-conf">${confidence}% confidence</span>
-          <span class="popup-coords">${sample.lat.toFixed(5)}, ${sample.lng.toFixed(5)}</span>
-        </div>
-      `)
+      const allScores = Object.entries(sample.result.confidence)
+        .sort(([, a], [, b]) => b - a)
+        .map(([label, score]) => `<span class="popup-row"><span>${label}</span><span>${(score * 100).toFixed(1)}%</span></span>`)
+        .join('')
+
+      const popup = new mapboxgl.Popup({ offset: 20, maxWidth: '240px', closeButton: false, closeOnClick: false })
+        .setHTML(`
+          <div class="marker-popup">
+            <span class="popup-label" style="color:${color}">${sample.result.label}</span>
+            <span class="popup-conf">${confidence}% confidence</span>
+            <div class="popup-scores">${allScores}</div>
+            <span class="popup-coords">${sample.lat.toFixed(5)}, ${sample.lng.toFixed(5)}</span>
+          </div>
+        `)
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([sample.lng, sample.lat])
-        .setPopup(popup)
         .addTo(map)
+
+      el.addEventListener('mouseenter', () => popup.addTo(map).setLngLat([sample.lng, sample.lat]))
+      el.addEventListener('mouseleave', () => popup.remove())
 
       markersRef.current[sample.id] = { marker }
     })

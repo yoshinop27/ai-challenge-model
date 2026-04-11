@@ -1,18 +1,12 @@
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { SOIL_COLORS, FALLBACK_COLOR } from '../utils/constants'
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
-export const SOIL_COLORS = {
-  'Alluvial soil': '#22d3ee',
-  'Black Soil':    '#94a3b8',
-  'Clay soil':     '#f59e0b',
-  'Red soil':      '#ef4444',
-}
-
 function getSoilColor(label) {
-  return SOIL_COLORS[label] ?? '#6366f1'
+  return SOIL_COLORS[label] ?? FALLBACK_COLOR
 }
 
 function farmSizeToZoom(acres) {
@@ -27,12 +21,57 @@ function makeMarkerEl(color) {
   return el
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function buildPopupHtml(sample, color) {
+  const confidence = (sample.result.confidence[sample.result.label] * 100).toFixed(1)
+  const allScores = Object.entries(sample.result.confidence)
+    .sort(([, a], [, b]) => b - a)
+    .map(
+      ([label, score]) =>
+        `<span class="popup-row"><span>${escapeHtml(label)}</span><span>${(score * 100).toFixed(1)}%</span></span>`
+    )
+    .join('')
+
+  const rec = sample.result.recommendations
+  const recHtml = rec
+    ? `<div class="popup-section">
+        <p class="popup-summary">${escapeHtml(rec.summary)}</p>
+        <div class="popup-crops">
+          <div class="popup-crop-col">
+            <span class="popup-crop-title good">Good Crops</span>
+            ${rec.good_crops.map((c) => `<span class="popup-crop-tag good">${escapeHtml(c)}</span>`).join('')}
+          </div>
+          <div class="popup-crop-col">
+            <span class="popup-crop-title avoid">Avoid</span>
+            ${rec.avoid_crops.map((c) => `<span class="popup-crop-tag avoid">${escapeHtml(c)}</span>`).join('')}
+          </div>
+        </div>
+        <p class="popup-tip">${escapeHtml(rec.tip)}</p>
+      </div>`
+    : ''
+
+  return `<div class="marker-popup">
+    <span class="popup-label" style="color:${escapeHtml(color)}">${escapeHtml(sample.result.label)}</span>
+    <span class="popup-conf">${escapeHtml(confidence)}% confidence</span>
+    <div class="popup-scores">${allScores}</div>
+    ${recHtml}
+    <span class="popup-coords">${sample.lat.toFixed(5)}, ${sample.lng.toFixed(5)}</span>
+  </div>`
+}
+
 export default function FarmMap({ farm, samples, onMapClick }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef({})
 
-  // Init map once
   useEffect(() => {
     const map = new mapboxgl.Map({
       container: containerRef.current,
@@ -57,63 +96,32 @@ export default function FarmMap({ farm, samples, onMapClick }) {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync sample markers
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
-    // Clear existing markers
-    Object.values(markersRef.current).forEach(({ marker }) => marker.remove())
-    markersRef.current = {}
-
-    // Add one marker per sample
     samples.forEach((sample) => {
+      if (markersRef.current[sample.id]) return
+
       const color = getSoilColor(sample.result.label)
       const el = makeMarkerEl(color)
 
-      // Stop map click from firing when user clicks a marker
       el.addEventListener('click', (e) => e.stopPropagation())
 
-      const confidence = (sample.result.confidence[sample.result.label] * 100).toFixed(1)
-      const allScores = Object.entries(sample.result.confidence)
-        .sort(([, a], [, b]) => b - a)
-        .map(([label, score]) => `<span class="popup-row"><span>${label}</span><span>${(score * 100).toFixed(1)}%</span></span>`)
-        .join('')
-
-      const rec = sample.result.recommendations
-      const recHtml = rec ? `
-        <div class="popup-section">
-          <p class="popup-summary">${rec.summary}</p>
-          <div class="popup-crops">
-            <div class="popup-crop-col">
-              <span class="popup-crop-title good">Good Crops</span>
-              ${rec.good_crops.map(c => `<span class="popup-crop-tag good">${c}</span>`).join('')}
-            </div>
-            <div class="popup-crop-col">
-              <span class="popup-crop-title avoid">Avoid</span>
-              ${rec.avoid_crops.map(c => `<span class="popup-crop-tag avoid">${c}</span>`).join('')}
-            </div>
-          </div>
-          <p class="popup-tip">${rec.tip}</p>
-        </div>
-      ` : ''
-
-      const popup = new mapboxgl.Popup({ offset: 20, maxWidth: '280px', closeButton: false, closeOnClick: false })
-        .setHTML(`
-          <div class="marker-popup">
-            <span class="popup-label" style="color:${color}">${sample.result.label}</span>
-            <span class="popup-conf">${confidence}% confidence</span>
-            <div class="popup-scores">${allScores}</div>
-            ${recHtml}
-            <span class="popup-coords">${sample.lat.toFixed(5)}, ${sample.lng.toFixed(5)}</span>
-          </div>
-        `)
+      const popup = new mapboxgl.Popup({
+        offset: 20,
+        maxWidth: '280px',
+        closeButton: false,
+        closeOnClick: false,
+      }).setHTML(buildPopupHtml(sample, color))
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([sample.lng, sample.lat])
         .addTo(map)
 
-      el.addEventListener('mouseenter', () => popup.addTo(map).setLngLat([sample.lng, sample.lat]))
+      el.addEventListener('mouseenter', () =>
+        popup.addTo(map).setLngLat([sample.lng, sample.lat])
+      )
       el.addEventListener('mouseleave', () => popup.remove())
 
       markersRef.current[sample.id] = { marker }

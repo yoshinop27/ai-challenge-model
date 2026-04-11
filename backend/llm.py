@@ -30,7 +30,7 @@ def _parse_csv(csv_bytes: bytes) -> str:
     return "\n".join(lines)
 
 
-def _call_openrouter(messages: list, temperature: float = 0.1) -> str:
+def _call_openrouter(messages: list[dict], temperature: float = 0.1) -> str:
     payload = json.dumps({
         "model": MODEL,
         "messages": messages,
@@ -58,7 +58,11 @@ def _normalize(raw: dict) -> dict:
     if label not in LABELS:
         raise ValueError(f"Unexpected label from LLM: {label!r}")
 
-    confidence = {k: float(raw["confidence"].get(k, 0.0)) for k in LABELS}
+    raw_confidence = raw.get("confidence")
+    if not isinstance(raw_confidence, dict):
+        raise ValueError("LLM response missing valid 'confidence' object")
+
+    confidence = {k: float(raw_confidence.get(k, 0.0)) for k in LABELS}
     total = sum(confidence.values())
     if total > 0:
         confidence = {k: round(v / total, 6) for k, v in confidence.items()}
@@ -72,7 +76,11 @@ def predict_tabular(csv_bytes: bytes) -> dict:
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": f"Soil data:\n{data_text}"},
     ]
-    raw = json.loads(_call_openrouter(messages))
+    raw_text = _call_openrouter(messages)
+    try:
+        raw = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"LLM returned non-JSON response: {exc}") from exc
     return _normalize(raw)
 
 
@@ -95,7 +103,11 @@ def get_crop_recommendations(soil_label: str, confidence: float) -> dict:
         {"role": "system", "content": _CROP_SYSTEM_PROMPT},
         {"role": "user", "content": f"Soil type: {soil_label} (classified with {confidence:.1f}% confidence)"},
     ]
-    raw = json.loads(_call_openrouter(messages, temperature=0.3))
+    raw_text = _call_openrouter(messages, temperature=0.3)
+    try:
+        raw = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"LLM returned non-JSON response: {exc}") from exc
     return {
         "summary": str(raw.get("summary", "")),
         "good_crops": [str(c) for c in raw.get("good_crops", [])],

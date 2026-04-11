@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import FarmSetup from './components/FarmSetup'
-import FarmMap, { SOIL_COLORS } from './components/FarmMap'
+import FarmMap from './components/FarmMap'
 import SampleModal from './components/SampleModal'
+import { SOIL_COLORS, FALLBACK_COLOR } from './utils/constants'
 
 export default function App() {
   const [farm, setFarm] = useState(null)
@@ -66,7 +67,7 @@ export default function App() {
         <div className="legend">
           {foundTypes.map((label) => (
             <div key={label} className="legend-item">
-              <span className="legend-dot" style={{ background: SOIL_COLORS[label] ?? '#6366f1' }} />
+              <span className="legend-dot" style={{ background: SOIL_COLORS[label] ?? FALLBACK_COLOR }} />
               <span className="legend-label">{label}</span>
             </div>
           ))}

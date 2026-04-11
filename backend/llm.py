@@ -30,14 +30,11 @@ def _parse_csv(csv_bytes: bytes) -> str:
     return "\n".join(lines)
 
 
-def _call_openrouter(user_content: str) -> dict:
+def _call_openrouter(messages: list, temperature: float = 0.1) -> str:
     payload = json.dumps({
         "model": MODEL,
-        "messages": [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ],
-        "temperature": 0.1,
+        "messages": messages,
+        "temperature": temperature,
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -53,8 +50,7 @@ def _call_openrouter(user_content: str) -> dict:
     with urllib.request.urlopen(req, timeout=30) as resp:
         body = json.loads(resp.read().decode("utf-8"))
 
-    content = body["choices"][0]["message"]["content"].strip()
-    return json.loads(content)
+    return body["choices"][0]["message"]["content"].strip()
 
 
 def _normalize(raw: dict) -> dict:
@@ -72,6 +68,37 @@ def _normalize(raw: dict) -> dict:
 
 def predict_tabular(csv_bytes: bytes) -> dict:
     data_text = _parse_csv(csv_bytes)
-    user_content = f"Soil data:\n{data_text}"
-    raw = _call_openrouter(user_content)
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": f"Soil data:\n{data_text}"},
+    ]
+    raw = json.loads(_call_openrouter(messages))
     return _normalize(raw)
+
+
+_CROP_SYSTEM_PROMPT = """\
+You are an expert agronomist. Given a soil type, return structured crop recommendations.
+
+Respond ONLY with a JSON object in this exact format:
+{
+  "summary": "<1-2 sentences describing this soil type and its key characteristics>",
+  "good_crops": ["<crop>", "<crop>", "<crop>", "<crop>"],
+  "avoid_crops": ["<crop>", "<crop>", "<crop>"],
+  "tip": "<one concise, practical farming tip for this soil type>"
+}
+
+Be specific and practical. Do not include any other text."""
+
+
+def get_crop_recommendations(soil_label: str, confidence: float) -> dict:
+    messages = [
+        {"role": "system", "content": _CROP_SYSTEM_PROMPT},
+        {"role": "user", "content": f"Soil type: {soil_label} (classified with {confidence:.1f}% confidence)"},
+    ]
+    raw = json.loads(_call_openrouter(messages, temperature=0.3))
+    return {
+        "summary": str(raw.get("summary", "")),
+        "good_crops": [str(c) for c in raw.get("good_crops", [])],
+        "avoid_crops": [str(c) for c in raw.get("avoid_crops", [])],
+        "tip": str(raw.get("tip", "")),
+    }

@@ -80,12 +80,31 @@ export default function FarmMap({ farm, samples, onMapClick }) {
         .map(([label, score]) => `<span class="popup-row"><span>${label}</span><span>${(score * 100).toFixed(1)}%</span></span>`)
         .join('')
 
-      const popup = new mapboxgl.Popup({ offset: 20, maxWidth: '240px', closeButton: false, closeOnClick: false })
+      const rec = sample.result.recommendations
+      const recHtml = rec ? `
+        <div class="popup-section">
+          <p class="popup-summary">${rec.summary}</p>
+          <div class="popup-crops">
+            <div class="popup-crop-col">
+              <span class="popup-crop-title good">Good Crops</span>
+              ${rec.good_crops.map(c => `<span class="popup-crop-tag good">${c}</span>`).join('')}
+            </div>
+            <div class="popup-crop-col">
+              <span class="popup-crop-title avoid">Avoid</span>
+              ${rec.avoid_crops.map(c => `<span class="popup-crop-tag avoid">${c}</span>`).join('')}
+            </div>
+          </div>
+          <p class="popup-tip">${rec.tip}</p>
+        </div>
+      ` : ''
+
+      const popup = new mapboxgl.Popup({ offset: 20, maxWidth: '280px', closeButton: false, closeOnClick: false })
         .setHTML(`
           <div class="marker-popup">
             <span class="popup-label" style="color:${color}">${sample.result.label}</span>
             <span class="popup-conf">${confidence}% confidence</span>
             <div class="popup-scores">${allScores}</div>
+            ${recHtml}
             <span class="popup-coords">${sample.lat.toFixed(5)}, ${sample.lng.toFixed(5)}</span>
           </div>
         `)

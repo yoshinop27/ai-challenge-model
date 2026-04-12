@@ -106,8 +106,9 @@ body {
   flex-shrink: 0;
 }
 
-.legend-item  { display: flex; align-items: center; gap: 0.45rem; font-size: 0.82rem; color: #ccc; }
-.legend-dot   { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-item        { display: flex; align-items: center; gap: 0.45rem; font-size: 0.82rem; color: #ccc; }
+.legend-dot         { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-group-label { font-size: 0.7rem; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.05em; align-self: center; }
 
 /* ─── Crop panel (map overlay, top-right) ────────────── */
 .crop-panel {
@@ -343,6 +344,15 @@ body {
   font-size: 0.7rem;
   color: #555;
   font-family: monospace;
+}
+
+.popup-section-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  margin-top: 0.4rem;
 }
 
 /* Modal crop hint */

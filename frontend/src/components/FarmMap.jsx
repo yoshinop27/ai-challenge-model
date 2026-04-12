@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { SOIL_COLORS, FALLBACK_COLOR } from '../utils/constants'
+import { SOIL_COLORS, MOISTURE_COLORS, FALLBACK_COLOR } from '../utils/constants'
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -31,14 +31,35 @@ function escapeHtml(str) {
 }
 
 function buildPopupHtml(sample, color) {
-  const confidence = (sample.result.confidence[sample.result.label] * 100).toFixed(1)
-  const allScores = Object.entries(sample.result.confidence)
+  const soil = sample.result.soil
+  const moisture = sample.result.moisture
+
+  const soilConf = (soil.confidence[soil.label] * 100).toFixed(1)
+  const soilScores = Object.entries(soil.confidence)
     .sort(([, a], [, b]) => b - a)
     .map(
       ([label, score]) =>
         `<span class="popup-row"><span>${escapeHtml(label)}</span><span>${(score * 100).toFixed(1)}%</span></span>`
     )
     .join('')
+
+  let moistureHtml = ''
+  if (moisture) {
+    const moistureColor = MOISTURE_COLORS[moisture.label] ?? FALLBACK_COLOR
+    const moistureConf = (moisture.confidence[moisture.label] * 100).toFixed(1)
+    const moistureScores = Object.entries(moisture.confidence)
+      .sort(([, a], [, b]) => b - a)
+      .map(
+        ([label, score]) =>
+          `<span class="popup-row"><span>${escapeHtml(label)}</span><span>${(score * 100).toFixed(1)}%</span></span>`
+      )
+      .join('')
+    moistureHtml = `
+      <span class="popup-section-title">Moisture</span>
+      <span class="popup-label" style="color:${escapeHtml(moistureColor)}">${escapeHtml(moisture.label)}</span>
+      <span class="popup-conf">${escapeHtml(moistureConf)}% confidence</span>
+      <div class="popup-scores">${moistureScores}</div>`
+  }
 
   const rec = sample.result.recommendations
   let recHtml = ''
@@ -73,9 +94,11 @@ function buildPopupHtml(sample, color) {
   }
 
   return `<div class="marker-popup">
-    <span class="popup-label" style="color:${escapeHtml(color)}">${escapeHtml(sample.result.label)}</span>
-    <span class="popup-conf">${escapeHtml(confidence)}% confidence</span>
-    <div class="popup-scores">${allScores}</div>
+    <span class="popup-section-title">Soil Condition</span>
+    <span class="popup-label" style="color:${escapeHtml(color)}">${escapeHtml(soil.label)}</span>
+    <span class="popup-conf">${escapeHtml(soilConf)}% confidence</span>
+    <div class="popup-scores">${soilScores}</div>
+    ${moistureHtml}
     ${recHtml}
     <span class="popup-coords">${sample.lat.toFixed(5)}, ${sample.lng.toFixed(5)}</span>
   </div>`
@@ -124,7 +147,7 @@ export default function FarmMap({ farm, samples, onMapClick }) {
     samples.forEach((sample) => {
       if (markersRef.current[sample.id]) return
 
-      const color = getSoilColor(sample.result.label)
+      const color = getSoilColor(sample.result.soil?.label)
       const el = makeMarkerEl(color)
 
       const popup = new mapboxgl.Popup({

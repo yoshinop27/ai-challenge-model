@@ -85,47 +85,53 @@ def predict_tabular(csv_bytes: bytes) -> dict:
 
 
 _GENERIC_CROP_PROMPT = """\
-You are an expert agronomist. Given a soil type, return structured crop recommendations.
+You are an expert agronomist. Given soil condition and moisture data, return structured crop recommendations.
 
 Respond ONLY with a JSON object in this exact format:
 {
   "mode": "generic",
-  "summary": "<1-2 sentences describing this soil type and its key characteristics>",
+  "summary": "<1-2 sentences describing this soil condition and moisture level and their combined effect on farming>",
   "good_crops": ["<crop>", "<crop>", "<crop>", "<crop>"],
   "avoid_crops": ["<crop>", "<crop>", "<crop>"],
-  "tip": "<one concise, practical farming tip for this soil type>"
+  "tip": "<one concise, practical farming tip accounting for both soil condition and moisture>"
 }
 
 Be specific and practical. Do not include any other text."""
 
 _TARGETED_CROP_PROMPT = """\
-You are an expert agronomist. The farmer is considering specific crops. Evaluate each one for the given soil type.
+You are an expert agronomist. The farmer is considering specific crops. Evaluate each one for the given soil condition and moisture level.
 
 Respond ONLY with a JSON object in this exact format:
 {
   "mode": "targeted",
-  "summary": "<1-2 sentences describing this soil type and its key characteristics>",
+  "summary": "<1-2 sentences describing this soil condition and moisture level and their combined effect on farming>",
   "crop_analysis": [
     {"crop": "<name>", "suitable": true, "reason": "<brief reason>"},
     {"crop": "<name>", "suitable": false, "reason": "<brief reason>"}
   ],
-  "tip": "<one concise, practical farming tip for this soil type>"
+  "tip": "<one concise, practical farming tip accounting for both soil condition and moisture>"
 }
 
 Evaluate every crop the farmer listed. Be honest and specific. Do not include any other text."""
 
 
-def get_crop_recommendations(soil_label: str, confidence: float, crops: list[str] | None = None) -> dict:
+def get_crop_recommendations(
+    soil_label: str,
+    confidence: float,
+    crops: list[str] | None = None,
+    moisture_label: str | None = None,
+) -> dict:
+    soil_desc = f"Soil condition: {soil_label} ({confidence:.1f}% confidence)"
+    if moisture_label:
+        soil_desc += f"\nSoil moisture: {moisture_label}"
+
     if crops:
         crop_str = ", ".join(crops)
         system = _TARGETED_CROP_PROMPT
-        user = (
-            f"Soil type: {soil_label} ({confidence:.1f}% confidence)\n"
-            f"Crops to evaluate: {crop_str}"
-        )
+        user = f"{soil_desc}\nCrops to evaluate: {crop_str}"
     else:
         system = _GENERIC_CROP_PROMPT
-        user = f"Soil type: {soil_label} (classified with {confidence:.1f}% confidence)"
+        user = soil_desc
 
     messages = [
         {"role": "system", "content": system},

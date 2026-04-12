@@ -3,7 +3,7 @@ import FarmSetup from './components/FarmSetup'
 import FarmMap from './components/FarmMap'
 import SampleModal from './components/SampleModal'
 import CropPanel from './components/CropPanel'
-import { SOIL_COLORS, FALLBACK_COLOR } from './utils/constants'
+import { SOIL_COLORS, MOISTURE_COLORS, FALLBACK_COLOR } from './utils/constants'
 
 export default function App() {
   const [farm, setFarm] = useState(null)
@@ -36,10 +36,19 @@ export default function App() {
   }
 
   if (!farm) {
-    return <FarmSetup onSubmit={setFarm} />
+    return (
+      <FarmSetup
+        onSubmit={(data) => {
+          const { crops: initialCrops = [], ...farmData } = data
+          setCrops(initialCrops)
+          setFarm(farmData)
+        }}
+      />
+    )
   }
 
-  const foundTypes = [...new Set(samples.map((s) => s.result.label))]
+  const foundSoilTypes = [...new Set(samples.map((s) => s.result.soil?.label).filter(Boolean))]
+  const foundMoistureTypes = [...new Set(samples.map((s) => s.result.moisture?.label).filter(Boolean))]
 
   return (
     <div className="map-page">
@@ -66,14 +75,30 @@ export default function App() {
         )}
       </div>
 
-      {foundTypes.length > 0 && (
+      {(foundSoilTypes.length > 0 || foundMoistureTypes.length > 0) && (
         <div className="legend">
-          {foundTypes.map((label) => (
-            <div key={label} className="legend-item">
-              <span className="legend-dot" style={{ background: SOIL_COLORS[label] ?? FALLBACK_COLOR }} />
-              <span className="legend-label">{label}</span>
-            </div>
-          ))}
+          {foundSoilTypes.length > 0 && (
+            <>
+              <span className="legend-group-label">Condition:</span>
+              {foundSoilTypes.map((label) => (
+                <div key={`soil-${label}`} className="legend-item">
+                  <span className="legend-dot" style={{ background: SOIL_COLORS[label] ?? FALLBACK_COLOR }} />
+                  <span className="legend-label">{label}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {foundMoistureTypes.length > 0 && (
+            <>
+              <span className="legend-group-label">Moisture:</span>
+              {foundMoistureTypes.map((label) => (
+                <div key={`moisture-${label}`} className="legend-item">
+                  <span className="legend-dot" style={{ background: MOISTURE_COLORS[label] ?? FALLBACK_COLOR }} />
+                  <span className="legend-label">{label}</span>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 

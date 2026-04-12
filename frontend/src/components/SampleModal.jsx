@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
-export default function SampleModal({ point, onResult, onClose }) {
+export default function SampleModal({ point, crops = [], onResult, onClose }) {
+  const cardRef = useRef(null)
   const [uploadType, setUploadType] = useState('image')
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -22,6 +23,7 @@ export default function SampleModal({ point, onResult, onClose }) {
       const body = new FormData()
       body.append('file', file)
       body.append('type', uploadType)
+      if (crops.length > 0) body.append('crops', crops.join(','))
       const resp = await fetch('http://localhost:8000/predict', { method: 'POST', body })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
@@ -34,15 +36,24 @@ export default function SampleModal({ point, onResult, onClose }) {
     }
   }
 
+  const handleOverlayClick = (e) => {
+    if (!loading && cardRef.current && !cardRef.current.contains(e.target)) {
+      onClose()
+    }
+  }
+
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-card">
+    <div className="modal-overlay" onClick={handleOverlayClick}>
+      <div className="modal-card" ref={cardRef}>
         <div className="modal-header">
           <div>
             <h2 className="modal-title">Add Soil Sample</h2>
             <p className="modal-coords">
               {point.lat.toFixed(5)}, {point.lng.toFixed(5)}
             </p>
+            {crops.length > 0 && (
+              <p className="modal-crops-hint">Analyzing for: {crops.join(', ')}</p>
+            )}
           </div>
           <button className="modal-close" onClick={onClose} disabled={loading}>×</button>
         </div>

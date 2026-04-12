@@ -19,9 +19,24 @@ function validate(fields) {
 export default function FarmSetup({ onSubmit }) {
   const [fields, setFields] = useState({ farmSize: '', lat: '', lng: '' })
   const [errors, setErrors] = useState({})
+  const [crops, setCrops] = useState([])
+  const [cropInput, setCropInput] = useState('')
 
   const handleChange = (name) => (e) =>
     setFields((prev) => ({ ...prev, [name]: e.target.value }))
+
+  const addCrop = () => {
+    const val = cropInput.trim()
+    if (!val || crops.includes(val)) { setCropInput(''); return }
+    setCrops((prev) => [...prev, val])
+    setCropInput('')
+  }
+
+  const removeCrop = (crop) => setCrops((prev) => prev.filter((c) => c !== crop))
+
+  const handleCropKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addCrop() }
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -32,6 +47,7 @@ export default function FarmSetup({ onSubmit }) {
       lat: Number(fields.lat),
       lng: Number(fields.lng),
       farmSize: Number(fields.farmSize),
+      crops,
     })
   }
 
@@ -84,6 +100,31 @@ export default function FarmSetup({ onSubmit }) {
               />
               {errors.lng && <p className="field-error">{errors.lng}</p>}
             </div>
+          </div>
+
+          <div className="field">
+            <label className="field-label" htmlFor="setup-crop">Crops of Interest (optional)</label>
+            <div className="crop-input-row">
+              <input
+                id="setup-crop"
+                className="crop-input"
+                placeholder="e.g. Cotton"
+                value={cropInput}
+                onChange={(e) => setCropInput(e.target.value)}
+                onKeyDown={handleCropKey}
+              />
+              <button className="crop-add-btn" onClick={addCrop} type="button">+</button>
+            </div>
+            {crops.length > 0 && (
+              <div className="crop-chips">
+                {crops.map((c) => (
+                  <span key={c} className="crop-chip">
+                    {c}
+                    <button className="crop-chip-remove" onClick={() => removeCrop(c)} type="button">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <button type="submit" className="submit-btn">View My Farm</button>

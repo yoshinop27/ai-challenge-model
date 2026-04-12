@@ -30,7 +30,7 @@ def _parse_csv(csv_bytes: bytes) -> str:
     return "\n".join(lines)
 
 
-def _call_openrouter(messages: list, temperature: float = 0.1) -> str:
+def _call_openrouter(messages: list[dict], temperature: float = 0.1) -> str:
     payload = json.dumps({
         "model": MODEL,
         "messages": messages,
@@ -58,7 +58,11 @@ def _normalize(raw: dict) -> dict:
     if label not in LABELS:
         raise ValueError(f"Unexpected label from LLM: {label!r}")
 
-    confidence = {k: float(raw["confidence"].get(k, 0.0)) for k in LABELS}
+    raw_confidence = raw.get("confidence")
+    if not isinstance(raw_confidence, dict):
+        raise ValueError("LLM response missing valid 'confidence' object")
+
+    confidence = {k: float(raw_confidence.get(k, 0.0)) for k in LABELS}
     total = sum(confidence.values())
     if total > 0:
         confidence = {k: round(v / total, 6) for k, v in confidence.items()}
@@ -72,33 +76,89 @@ def predict_tabular(csv_bytes: bytes) -> dict:
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": f"Soil data:\n{data_text}"},
     ]
-    raw = json.loads(_call_openrouter(messages))
+    raw_text = _call_openrouter(messages)
+    try:
+        raw = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"LLM returned non-JSON response: {exc}") from exc
     return _normalize(raw)
 
 
-_CROP_SYSTEM_PROMPT = """\
-You are an expert agronomist. Given a soil type, return structured crop recommendations.
+_GENERIC_CROP_PROMPT = """\
+You are an expert agronomist. Given soil condition and moisture data, return structured crop recommendations.
 
 Respond ONLY with a JSON object in this exact format:
 {
-  "summary": "<1-2 sentences describing this soil type and its key characteristics>",
+  "mode": "generic",
+  "summary": "<1-2 sentences describing this soil condition and moisture level and their combined effect on farming>",
   "good_crops": ["<crop>", "<crop>", "<crop>", "<crop>"],
   "avoid_crops": ["<crop>", "<crop>", "<crop>"],
-  "tip": "<one concise, practical farming tip for this soil type>"
+  "tip": "<one concise, practical farming tip accounting for both soil condition and moisture>"
 }
 
 Be specific and practical. Do not include any other text."""
 
+_TARGETED_CROP_PROMPT = """\
+You are an expert agronomist. The farmer is considering specific crops. Evaluate each one for the given soil condition and moisture level.
 
-def get_crop_recommendations(soil_label: str, confidence: float) -> dict:
+Respond ONLY with a JSON object in this exact format:
+{
+  "mode": "targeted",
+  "summary": "<1-2 sentences describing this soil condition and moisture level and their combined effect on farming>",
+  "crop_analysis": [
+    {"crop": "<name>", "suitable": true, "reason": "<brief reason>"},
+    {"crop": "<name>", "suitable": false, "reason": "<brief reason>"}
+  ],
+  "tip": "<one concise, practical farming tip accounting for both soil condition and moisture>"
+}
+
+Evaluate every crop the farmer listed. Be honest and specific. Do not include any other text."""
+
+
+def get_crop_recommendations(
+    soil_label: str,
+    confidence: float,
+    crops: list[str] | None = None,
+    moisture_label: str | None = None,
+) -> dict:
+    soil_desc = f"Soil condition: {soil_label} ({confidence:.1f}% confidence)"
+    if moisture_label:
+        soil_desc += f"\nSoil moisture: {moisture_label}"
+
+    if crops:
+        crop_str = ", ".join(crops)
+        system = _TARGETED_CROP_PROMPT
+        user = f"{soil_desc}\nCrops to evaluate: {crop_str}"
+    else:
+        system = _GENERIC_CROP_PROMPT
+        user = soil_desc
+
     messages = [
-        {"role": "system", "content": _CROP_SYSTEM_PROMPT},
-        {"role": "user", "content": f"Soil type: {soil_label} (classified with {confidence:.1f}% confidence)"},
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
     ]
-    raw = json.loads(_call_openrouter(messages, temperature=0.3))
-    return {
+    raw_text = _call_openrouter(messages, temperature=0.3)
+    try:
+        raw = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"LLM returned non-JSON response: {exc}") from exc
+
+    result: dict = {
+        "mode": raw.get("mode", "generic"),
         "summary": str(raw.get("summary", "")),
-        "good_crops": [str(c) for c in raw.get("good_crops", [])],
-        "avoid_crops": [str(c) for c in raw.get("avoid_crops", [])],
         "tip": str(raw.get("tip", "")),
     }
+    if result["mode"] == "targeted":
+        result["crop_analysis"] = [
+            {
+                "crop": str(item.get("crop", "")),
+                "suitable": bool(item.get("suitable", False)),
+                "reason": str(item.get("reason", "")),
+            }
+            for item in raw.get("crop_analysis", [])
+            if isinstance(item, dict)
+        ]
+    else:
+        result["good_crops"] = [str(c) for c in raw.get("good_crops", [])]
+        result["avoid_crops"] = [str(c) for c in raw.get("avoid_crops", [])]
+    return result

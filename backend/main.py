@@ -1,22 +1,36 @@
+import asyncio
 import os
 from pathlib import Path
 
-# Load .env from project root before importing modules that read env vars
-_env_path = Path(__file__).resolve().parent.parent / ".env"
-if _env_path.is_file():
-    for _line in _env_path.read_text().splitlines():
-        _line = _line.strip()
-        if _line and not _line.startswith("#") and "=" in _line:
-            _k, _v = _line.split("=", 1)
-            os.environ.setdefault(_k.strip(), _v.strip())
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from backend.model import SoilClassifier
-from backend.llm import predict_tabular, get_crop_recommendations
+def _load_dotenv() -> None:
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_dotenv()
+
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from backend.model import SoilClassifier, DualClassifier  # noqa: E402
+from backend.llm import predict_tabular, get_crop_recommendations  # noqa: E402
 
 app = FastAPI(title="AI Challenge API")
-_classifier = SoilClassifier()
+
+# Use DualClassifier if the moisture model exists, otherwise fall back to type-only
+_moisture_path = Path(__file__).resolve().parent / "moisture_model.pt"
+if _moisture_path.is_file():
+    _classifier = DualClassifier()
+    _dual = True
+else:
+    _classifier = SoilClassifier()
+    _dual = False
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,27 +41,47 @@ app.add_middleware(
 
 
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health() -> dict:
+    return {"status": "ok", "dual_model": _dual}
 
 
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
     type: str = Form("image"),
-):
+    crops: str = Form(""),
+) -> dict:
     contents = await file.read()
+    crop_list = [c.strip() for c in crops.split(",") if c.strip()]
 
     if type == "tabular":
         try:
-            return predict_tabular(contents)
+            return await asyncio.to_thread(predict_tabular, contents)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
-    result = _classifier.predict(contents)
+    result = await asyncio.to_thread(_classifier.predict, contents)
+
+    # Normalise to always have top-level soil + moisture keys
+    if _dual:
+        soil_label = result["soil"]["label"]
+        soil_confidence = result["soil"]["confidence"][soil_label] * 100
+    else:
+        # Single-model fallback: wrap under "soil" key, no moisture
+        result = {"soil": result, "moisture": None}
+        soil_label = result["soil"]["label"]
+        soil_confidence = result["soil"]["confidence"][soil_label] * 100
+
     try:
-        top_confidence = result["confidence"][result["label"]] * 100
-        result["recommendations"] = get_crop_recommendations(result["label"], top_confidence)
+        moisture_label = result["moisture"]["label"] if result["moisture"] else None
+        result["recommendations"] = await asyncio.to_thread(
+            get_crop_recommendations,
+            soil_label,
+            soil_confidence,
+            crop_list,
+            moisture_label,
+        )
     except Exception:
         result["recommendations"] = None
+
     return result

@@ -1,29 +1,39 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import FarmSetup from './components/FarmSetup'
 import FarmMap from './components/FarmMap'
 import SampleModal from './components/SampleModal'
-import CropPanel from './components/CropPanel'
 import { SOIL_COLORS, MOISTURE_COLORS, FALLBACK_COLOR } from './utils/constants'
+
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
+
+async function fetchSatelliteBase64(bounds) {
+  const { west, south, east, north } = bounds
+  const bbox = `[${west},${south},${east},${north}]`
+  const url = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${bbox}/600x600?access_token=${MAPBOX_TOKEN}`
+  const resp = await fetch(url)
+  if (!resp.ok) return null
+  const blob = await resp.blob()
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result.split(',')[1])
+    reader.readAsDataURL(blob)
+  })
+}
 
 export default function App() {
   const [farm, setFarm] = useState(null)
   const [samples, setSamples] = useState([])
   const [pendingPoint, setPendingPoint] = useState(null)
   const [crops, setCrops] = useState([])
-
-  const handleMapClick = (lat, lng) => {
-    setPendingPoint({ lat, lng })
-  }
+  const [farmAnalysis, setFarmAnalysis] = useState(null)
+  const [analyzingFarm, setAnalyzingFarm] = useState(false)
+  const [analysisError, setAnalysisError] = useState(null)
+  const getBoundsRef = useRef(null)
 
   const handleSampleResult = (result) => {
     setSamples((prev) => [
       ...prev,
-      {
-        id: `${Date.now()}`,
-        lat: pendingPoint.lat,
-        lng: pendingPoint.lng,
-        result,
-      },
+      { id: `${Date.now()}`, lat: pendingPoint.lat, lng: pendingPoint.lng, result },
     ])
     setPendingPoint(null)
   }
@@ -33,6 +43,31 @@ export default function App() {
     setSamples([])
     setPendingPoint(null)
     setCrops([])
+    setFarmAnalysis(null)
+    setAnalysisError(null)
+  }
+
+  const handleAnalyzeFarm = async () => {
+    setAnalyzingFarm(true)
+    setAnalysisError(null)
+    try {
+      const bounds = getBoundsRef.current?.()
+      const satellite_b64 = bounds ? await fetchSatelliteBase64(bounds) : null
+      const resp = await fetch('http://localhost:8000/analyze-farm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ farm, samples, crops, satellite_b64, bounds }),
+      })
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        throw new Error(err.detail || `Server error: ${resp.status}`)
+      }
+      setFarmAnalysis(await resp.json())
+    } catch (err) {
+      setAnalysisError(err.message)
+    } finally {
+      setAnalyzingFarm(false)
+    }
   }
 
   if (!farm) {
@@ -50,6 +85,19 @@ export default function App() {
   const foundSoilTypes = [...new Set(samples.map((s) => s.result.soil?.label).filter(Boolean))]
   const foundMoistureTypes = [...new Set(samples.map((s) => s.result.moisture?.label).filter(Boolean))]
 
+  const renderLegendGroup = (groupLabel, labels, colors, prefix) =>
+    labels.length > 0 && (
+      <>
+        <span className="legend-group-label">{groupLabel}</span>
+        {labels.map((label) => (
+          <div key={`${prefix}-${label}`} className="legend-item">
+            <span className="legend-dot" style={{ background: colors[label] ?? FALLBACK_COLOR }} />
+            <span className="legend-label">{label}</span>
+          </div>
+        ))}
+      </>
+    )
+
   return (
     <div className="map-page">
       <div className="map-topbar">
@@ -63,42 +111,33 @@ export default function App() {
           {samples.length > 0 && (
             <span className="topbar-count">{samples.length} sample{samples.length !== 1 ? 's' : ''}</span>
           )}
+          {samples.length >= 3 && (
+            <button
+              className="analyze-btn"
+              onClick={handleAnalyzeFarm}
+              disabled={analyzingFarm}
+            >
+              {analyzingFarm ? 'Analyzing…' : farmAnalysis ? 'Re-analyze Farm' : 'Analyze Farm'}
+            </button>
+          )}
           <button className="reset-btn" onClick={handleReset}>Change Farm</button>
         </div>
       </div>
 
       <div className="map-wrapper">
-        <FarmMap farm={farm} samples={samples} onMapClick={handleMapClick} />
-        <CropPanel crops={crops} onChange={setCrops} />
+        <FarmMap farm={farm} samples={samples} farmAnalysis={farmAnalysis} onMapClick={(lat, lng) => setPendingPoint({ lat, lng })} onMapReady={(fn) => { getBoundsRef.current = fn }} />
         {samples.length === 0 && (
           <div className="map-hint">Click anywhere on your farm to add a soil sample</div>
+        )}
+        {analysisError && (
+          <div className="map-hint" style={{ color: '#ef4444' }}>Analysis failed: {analysisError}</div>
         )}
       </div>
 
       {(foundSoilTypes.length > 0 || foundMoistureTypes.length > 0) && (
         <div className="legend">
-          {foundSoilTypes.length > 0 && (
-            <>
-              <span className="legend-group-label">Condition:</span>
-              {foundSoilTypes.map((label) => (
-                <div key={`soil-${label}`} className="legend-item">
-                  <span className="legend-dot" style={{ background: SOIL_COLORS[label] ?? FALLBACK_COLOR }} />
-                  <span className="legend-label">{label}</span>
-                </div>
-              ))}
-            </>
-          )}
-          {foundMoistureTypes.length > 0 && (
-            <>
-              <span className="legend-group-label">Moisture:</span>
-              {foundMoistureTypes.map((label) => (
-                <div key={`moisture-${label}`} className="legend-item">
-                  <span className="legend-dot" style={{ background: MOISTURE_COLORS[label] ?? FALLBACK_COLOR }} />
-                  <span className="legend-label">{label}</span>
-                </div>
-              ))}
-            </>
-          )}
+          {renderLegendGroup('Condition:', foundSoilTypes, SOIL_COLORS, 'soil')}
+          {renderLegendGroup('Moisture:', foundMoistureTypes, MOISTURE_COLORS, 'moisture')}
         </div>
       )}
 

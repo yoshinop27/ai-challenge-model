@@ -19,7 +19,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
 OPENROUTER_API_KEY  = os.environ.get("OPENROUTER_API_KEY", "")
-MODEL = "anthropic/claude-opus-4-6"
+MODEL = "anthropic/claude-haiku-4-5"
 OPENROUTER_TIMEOUT_SEC = float(os.environ.get("OPENROUTER_TIMEOUT_SEC", "40"))
 
 GRID_N   = 15
@@ -119,7 +119,7 @@ def _farm_bounds(farm: dict, n: int, bounds: dict | None = None):
     return lats, lngs, lat_min, lat_max, lng_min, lng_max
 
 
-def _call_claude(system: str, user_content: list | str, max_tokens: int = 4096) -> str:
+def _call_claude(system: str, user_content: list | str, max_tokens: int = 1024) -> str:
     content = user_content if isinstance(user_content, list) else [{"type": "text", "text": user_content}]
     payload = json.dumps({
         "model": MODEL,
@@ -300,7 +300,7 @@ def get_farm_timeline(
         "Generate the 12-month agricultural timeline now."
     )
 
-    raw = _call_claude(_TIMELINE_SYSTEM, user_text, max_tokens=5000)
+    raw = _call_claude(_TIMELINE_SYSTEM, user_text, max_tokens=2000)
     return _parse_json_with_fallback(raw, {"weather_outlook": "", "summary": "", "phases": []})
 
 

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SoilSense — Data Flow</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f0f0f;
+      color: #e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 48px 32px 64px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 52px;
+    }
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    header p {
+      font-size: 0.85rem;
+      color: #555;
+      margin-top: 6px;
+    }
+
+    /* ── Layout ── */
+    .diagram {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 56px 1fr 56px 1fr;
+      grid-template-rows: auto auto auto;
+      gap: 0;
+      align-items: start;
+    }
+
+    /* ── Column headers ── */
+    .col-header {
+      text-align: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #444;
+      padding-bottom: 20px;
+    }
+    .col-header span {
+      display: inline-block;
+      padding: 4px 12px;
+      border: 1px solid #222;
+      border-radius: 999px;
+    }
+
+    /* spacers for arrow columns */
+    .arrow-col-header { grid-column: span 1; }
+
+    /* ── Nodes ── */
+    .col { display: flex; flex-direction: column; gap: 12px; }
+
+    .node {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 14px 16px;
+      position: relative;
+    }
+    .node-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .node-detail {
+      font-size: 0.75rem;
+      color: #666;
+      line-height: 1.5;
+    }
+    .node-badge {
+      display: inline-block;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+
+    /* accent colours */
+    .accent-blue   { border-color: #1e40af; }
+    .accent-blue   .node-badge { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .accent-blue   .node-title { color: #93c5fd; }
+
+    .accent-green  { border-color: #166534; }
+    .accent-green  .node-badge { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .accent-green  .node-title { color: #86efac; }
+
+    .accent-gold   { border-color: #78350f; }
+    .accent-gold   .node-badge { background: rgba(201,168,76,0.12); color: #c9a84c; }
+    .accent-gold   .node-title { color: #fbbf24; }
+
+    .accent-purple { border-color: #3730a3; }
+    .accent-purple .node-badge { background: rgba(129,140,248,0.12); color: #818cf8; }
+    .accent-purple .node-title { color: #a5b4fc; }
+
+    .accent-slate  { border-color: #1e293b; }
+    .accent-slate  .node-badge { background: rgba(148,163,184,0.10); color: #94a3b8; }
+    .accent-slate  .node-title { color: #cbd5e1; }
+
+    /* ── Arrows (SVG connectors) ── */
+    .arrow-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 18px;
+      gap: 12px;
+    }
+
+    .arrow-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .arrow-label {
+      font-size: 0.6rem;
+      color: #444;
+      text-align: center;
+      max-width: 48px;
+      line-height: 1.3;
+    }
+    .arrow-line {
+      width: 2px;
+      flex: 1;
+      min-height: 24px;
+      background: linear-gradient(to bottom, #2a2a2a, #333);
+    }
+    .arrow-head {
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 7px solid #333;
+    }
+    .arrow-right {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      width: 100%;
+    }
+    .arrow-right .h-line {
+      flex: 1;
+      height: 2px;
+      background: #2d2d2d;
+    }
+    .arrow-right .r-head {
+      width: 0; height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 7px solid #2d2d2d;
+    }
+
+    /* ── Data labels on arrows ── */
+    .data-tag {
+      font-size: 0.58rem;
+      color: #3a3a3a;
+      text-align: center;
+      padding: 0 2px;
+      white-space: nowrap;
+    }
+
+    /* ── External APIs section ── */
+    .ext-section {
+      max-width: 1100px;
+      margin: 40px auto 0;
+    }
+    .ext-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #333;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .ext-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .ext-node {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 8px;
+      padding: 12px 18px;
+      text-align: center;
+      min-width: 140px;
+    }
+    .ext-node .node-title { font-size: 0.8rem; color: #888; }
+    .ext-node .node-detail { font-size: 0.7rem; color: #444; margin-top: 3px; }
+
+    /* ── Legend ── */
+    .legend {
+      max-width: 1100px;
+      margin: 36px auto 0;
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: #555;
+    }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>SoilSense — Data Flow</h1>
+    <p>How data moves through the application · Grinnell AI · Pi515 2026</p>
+  </header>
+
+  <div class="diagram">
+
+    <!-- Column headers -->
+    <div class="col-header"><span>Frontend</span></div>
+    <div class="col-header arrow-col-header"></div>
+    <div class="col-header"><span>Backend (FastAPI)</span></div>
+    <div class="col-header arrow-col-header"></div>
+    <div class="col-header"><span>AI / ML</span></div>
+
+    <!-- ── Row 1: Sample prediction flow ── -->
+    <div class="col">
+
+      <div class="node accent-blue">
+        <span class="node-badge">UI</span>
+        <div class="node-title">Landing Page</div>
+        <div class="node-detail">SoilSense intro · demo · ethics · impact</div>
+      </div>
+
+      <div class="node accent-blue">
+        <span class="node-badge">UI</span>
+        <div class="node-title">Farm Setup</div>
+        <div class="node-detail">Location · farm size · crop list</div>
+      </div>
+
+      <div class="node accent-blue">
+        <span class="node-badge">UI</span>
+        <div class="node-title">Farm Map (Mapbox)</div>
+        <div class="node-detail">Satellite view · click to place soil samples · raster overlay</div>
+      </div>
+
+      <div class="node accent-blue">
+        <span class="node-badge">UI</span>
+        <div class="node-title">Sample Modal</div>
+        <div class="node-detail">Camera / file upload · sends image + crop list to /predict</div>
+      </div>
+
+      <div class="node accent-blue">
+        <span class="node-badge">UI</span>
+        <div class="node-title">Farm Timeline Modal</div>
+        <div class="node-detail">12-month calendar · weather outlook · per-activity badges</div>
+      </div>
+
+    </div>
+
+    <!-- Arrow col 1 -->
+    <div class="arrow-col">
+      <!-- spacer to align with Farm Map row -->
+      <div style="height: 116px;"></div>
+      <!-- Sample photo arrow -->
+      <div class="arrow-group" style="width:100%">
+        <div class="arrow-right"><div class="h-line"></div><div class="r-head"></div></div>
+        <div class="data-tag">photo + crops</div>
+      </div>
+      <div style="height: 24px;"></div>
+      <div class="arrow-group" style="width:100%">
+        <div class="arrow-right"><div class="h-line"></div><div class="r-head"></div></div>
+        <div class="data-tag">farm + samples + crops + satellite</div>
+      </div>
+      <div style="height: 12px;"></div>
+      <!-- result back arrow (reverse) -->
+      <div class="arrow-group" style="width:100%">
+        <div class="arrow-right" style="transform:scaleX(-1)"><div class="h-line"></div><div class="r-head"></div></div>
+        <div class="data-tag">timeline + contour maps</div>
+      </div>
+    </div>
+
+    <!-- Backend column -->
+    <div class="col">
+
+      <div class="node accent-green">
+        <span class="node-badge">API</span>
+        <div class="node-title">POST /predict</div>
+        <div class="node-detail">
+          Receives image bytes + crop list<br>
+          Runs DualClassifier<br>
+          Calls LLM for crop recommendations<br>
+          Returns soil label, moisture label, confidence scores, recommendations
+        </div>
+      </div>
+
+      <div class="node accent-green">
+        <span class="node-badge">API</span>
+        <div class="node-title">POST /analyze-farm</div>
+        <div class="node-detail">
+          Fetches current weather + 5-day forecast<br>
+          Fetches elevation grid (Open Elevation)<br>
+          Fetches Mapbox satellite image<br>
+          Calls Claude for per-crop suitability grids<br>
+          Calls Claude for 12-month timeline<br>
+          Returns contour PNGs + timeline JSON
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Arrow col 2 -->
+    <div class="arrow-col">
+      <div class="arrow-group" style="width:100%">
+        <div class="arrow-right"><div class="h-line"></div><div class="r-head"></div></div>
+        <div class="data-tag">image tensor</div>
+      </div>
+      <div style="height: 20px;"></div>
+      <div class="arrow-group" style="width:100%">
+        <div class="arrow-right" style="transform:scaleX(-1)"><div class="h-line"></div><div class="r-head"></div></div>
+        <div class="data-tag">soil + moisture predictions</div>
+      </div>
+      <div style="height: 40px;"></div>
+      <div class="arrow-group" style="width:100%">
+        <div class="arrow-right"><div class="h-line"></div><div class="r-head"></div></div>
+        <div class="data-tag">farm ctx + weather + elevation</div>
+      </div>
+      <div style="height: 12px;"></div>
+      <div class="arrow-group" style="width:100%">
+        <div class="arrow-right" style="transform:scaleX(-1)"><div class="h-line"></div><div class="r-head"></div></div>
+        <div class="data-tag">suitability grid + timeline</div>
+      </div>
+    </div>
+
+    <!-- AI / ML column -->
+    <div class="col">
+
+      <div class="node accent-gold">
+        <span class="node-badge">PyTorch</span>
+        <div class="node-title">EfficientNet-B0 — Soil Type</div>
+        <div class="node-detail">
+          Input: 224×224 RGB image<br>
+          Output: Alluvial / Black / Clay / Red soil<br>
+          Accuracy: 92.6% · trained on Kaggle dataset
+        </div>
+      </div>
+
+      <div class="node accent-gold">
+        <span class="node-badge">PyTorch</span>
+        <div class="node-title">EfficientNet-B0 — Moisture</div>
+        <div class="node-detail">
+          Input: same image tensor<br>
+          Output: Dry / Moderate / Wet<br>
+          Trained on Mendeley soil moisture dataset
+        </div>
+      </div>
+
+      <div class="node accent-purple">
+        <span class="node-badge">LLM · OpenRouter</span>
+        <div class="node-title">Claude (Opus) — Crop Recs</div>
+        <div class="node-detail">
+          Input: soil label, moisture, confidence, crop list<br>
+          Output: good / avoid crops + agronomic tip
+        </div>
+      </div>
+
+      <div class="node accent-purple">
+        <span class="node-badge">LLM · OpenRouter</span>
+        <div class="node-title">Claude (Opus) — Farm Analysis</div>
+        <div class="node-detail">
+          Input: satellite image + weather + elevation + samples<br>
+          Output: 15×15 suitability score grid per crop
+        </div>
+      </div>
+
+      <div class="node accent-purple">
+        <span class="node-badge">LLM · OpenRouter</span>
+        <div class="node-title">Claude (Opus) — Timeline</div>
+        <div class="node-detail">
+          Input: location, crops, soil samples, 5-day forecast<br>
+          Output: 12-month planting / harvest / maintenance calendar
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- External APIs -->
+  <div class="ext-section">
+    <div class="ext-label">External Data Sources</div>
+    <div class="ext-row">
+      <div class="ext-node">
+        <div class="node-title">OpenWeather API</div>
+        <div class="node-detail">Current conditions + 5-day forecast</div>
+      </div>
+      <div class="ext-node">
+        <div class="node-title">Open Elevation API</div>
+        <div class="node-detail">Per-grid-point elevation data</div>
+      </div>
+      <div class="ext-node">
+        <div class="node-title">Mapbox</div>
+        <div class="node-detail">Satellite tiles · static image for Claude</div>
+      </div>
+      <div class="ext-node">
+        <div class="node-title">OpenRouter</div>
+        <div class="node-detail">Routes requests to Claude Opus</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#1d4ed8"></div>Frontend (React/Vite)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#166534"></div>Backend (FastAPI/Python)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#c9a84c"></div>ML Models (PyTorch)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3730a3"></div>LLM (Claude via OpenRouter)</div>
+  </div>
+
+</body>
+</html>

@@ -1,8 +1,11 @@
 import { useState, useRef } from 'react'
+import LandingPage from './components/LandingPage'
 import FarmSetup from './components/FarmSetup'
 import FarmMap from './components/FarmMap'
 import SampleModal from './components/SampleModal'
+import FarmTimelineModal from './components/FarmTimelineModal'
 import { SOIL_COLORS, MOISTURE_COLORS, FALLBACK_COLOR } from './utils/constants'
+import { fetchWithTimeout } from './utils/api'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -21,11 +24,14 @@ async function fetchSatelliteBase64(bounds) {
 }
 
 export default function App() {
+  const [showLanding, setShowLanding] = useState(true)
   const [farm, setFarm] = useState(null)
   const [samples, setSamples] = useState([])
   const [pendingPoint, setPendingPoint] = useState(null)
   const [crops, setCrops] = useState([])
   const [farmAnalysis, setFarmAnalysis] = useState(null)
+  const [farmTimeline, setFarmTimeline] = useState(null)
+  const [showTimeline, setShowTimeline] = useState(false)
   const [analyzingFarm, setAnalyzingFarm] = useState(false)
   const [analysisError, setAnalysisError] = useState(null)
   const getBoundsRef = useRef(null)
@@ -44,16 +50,20 @@ export default function App() {
     setPendingPoint(null)
     setCrops([])
     setFarmAnalysis(null)
+    setFarmTimeline(null)
+    setShowTimeline(false)
     setAnalysisError(null)
   }
 
   const handleAnalyzeFarm = async () => {
+    if (analyzingFarm) return
+
     setAnalyzingFarm(true)
     setAnalysisError(null)
     try {
       const bounds = getBoundsRef.current?.()
       const satellite_b64 = bounds ? await fetchSatelliteBase64(bounds) : null
-      const resp = await fetch('http://localhost:8000/analyze-farm', {
+      const resp = await fetchWithTimeout('/analyze-farm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ farm, samples, crops, satellite_b64, bounds }),
@@ -62,12 +72,20 @@ export default function App() {
         const err = await resp.json().catch(() => ({}))
         throw new Error(err.detail || `Server error: ${resp.status}`)
       }
-      setFarmAnalysis(await resp.json())
+      const data = await resp.json()
+      const timeline = data['__timeline__'] ?? null
+      const { '__timeline__': _tl, ...cropAnalysis } = data
+      setFarmTimeline(timeline)
+      setFarmAnalysis(cropAnalysis)
     } catch (err) {
       setAnalysisError(err.message)
     } finally {
       setAnalyzingFarm(false)
     }
+  }
+
+  if (showLanding) {
+    return <LandingPage onEnter={() => setShowLanding(false)} />
   }
 
   if (!farm) {
@@ -111,6 +129,11 @@ export default function App() {
           {samples.length > 0 && (
             <span className="topbar-count">{samples.length} sample{samples.length !== 1 ? 's' : ''}</span>
           )}
+          {farmTimeline && (
+            <button className="timeline-btn" onClick={() => setShowTimeline(true)}>
+              📅 Farm Timeline
+            </button>
+          )}
           {samples.length >= 3 && (
             <button
               className="analyze-btn"
@@ -147,6 +170,13 @@ export default function App() {
           crops={crops}
           onResult={handleSampleResult}
           onClose={() => setPendingPoint(null)}
+        />
+      )}
+
+      {showTimeline && (
+        <FarmTimelineModal
+          timeline={farmTimeline}
+          onClose={() => setShowTimeline(false)}
         />
       )}
     </div>

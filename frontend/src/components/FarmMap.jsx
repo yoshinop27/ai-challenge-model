@@ -31,8 +31,23 @@ function buildScoresHtml(confidence) {
 
 function buildPopupHtml(sample, color) {
   const e = escapeHtml
-  const soil = sample.result.soil
-  const moisture = sample.result.moisture
+  const result = sample.result
+
+  // Tabular CSV result — flat {label, confidence} shape
+  if (!result.soil) {
+    const qualityColors = { good: '#4ade80', average: '#fbbf24', bad: '#f87171' }
+    const labelColor = qualityColors[result.label] ?? color
+    return `<div class="marker-popup">
+      <span class="popup-section-title">Soil Quality (CSV)</span>
+      <span class="popup-label" style="color:${e(labelColor)}">${e(result.label)}</span>
+      <div class="popup-scores">${buildScoresHtml(result.confidence)}</div>
+      <span class="popup-coords">${sample.lat.toFixed(5)}, ${sample.lng.toFixed(5)}</span>
+    </div>`
+  }
+
+  // Image result — {soil, moisture, recommendations} shape
+  const soil = result.soil
+  const moisture = result.moisture
   const soilConf = (soil.confidence[soil.label] * 100).toFixed(1)
 
   const moistureHtml = moisture ? (() => {
@@ -45,7 +60,7 @@ function buildPopupHtml(sample, color) {
       <div class="popup-scores">${buildScoresHtml(moisture.confidence)}</div>`
   })() : ''
 
-  const rec = sample.result.recommendations
+  const rec = result.recommendations
   const recHtml = rec?.mode === 'targeted' && rec.crop_analysis?.length
     ? `<div class="popup-section">
       <p class="popup-summary">${e(rec.summary)}</p>
@@ -72,12 +87,51 @@ function buildPopupHtml(sample, color) {
   </div>`
 }
 
+function getScoreAtPoint(lat, lng, cropData) {
+  const { scores, coordinates } = cropData
+  if (!scores || !coordinates) return null
+  const lng_min = coordinates[0][0], lat_max = coordinates[0][1]
+  const lng_max = coordinates[1][0], lat_min = coordinates[2][1]
+  const n = scores.length
+  const row = Math.round(((lat - lat_min) / (lat_max - lat_min)) * (n - 1))
+  const col = Math.round(((lng - lng_min) / (lng_max - lng_min)) * (n - 1))
+  const r = Math.max(0, Math.min(n - 1, row))
+  const c = Math.max(0, Math.min(n - 1, col))
+  return scores[r][c]
+}
+
+function buildSuitabilityHtml(crop, score, cropData, lat, lng) {
+  const e = escapeHtml
+  const pct = Math.round(score)
+  const tier = pct >= 65 ? 'good' : pct >= 35 ? 'moderate' : 'poor'
+  const tierColor = tier === 'good' ? '#4ade80' : tier === 'moderate' ? '#fbbf24' : '#f87171'
+  const tierLabel = tier === 'good' ? 'Good Zone' : tier === 'moderate' ? 'Moderate Zone' : 'Poor Zone'
+  const reason = tier === 'poor'
+    ? (cropData.poor_reason || cropData.summary || '')
+    : (cropData.good_reason || cropData.summary || '')
+  return `<div class="suit-popup">
+    <div class="suit-popup-head">
+      <span class="suit-crop">${e(crop)}</span>
+      <span class="suit-tier" style="color:${e(tierColor)}">${e(tierLabel)}</span>
+    </div>
+    <div class="suit-score-bar">
+      <div class="suit-score-fill" style="width:${pct}%;background:${e(tierColor)}"></div>
+    </div>
+    <div class="suit-score-label">${pct}/100 suitability</div>
+    ${reason ? `<p class="suit-reason">${e(reason)}</p>` : ''}
+    <button class="suit-add-btn" id="suit-add-sample">+ Add Sample Here</button>
+  </div>`
+}
+
 export default function FarmMap({ farm, samples, farmAnalysis, onMapClick, onMapReady }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef({})
   const openPopupRef = useRef(null)
   const mapReadyRef = useRef(false)
+  const farmAnalysisRef = useRef(null)
+  const activeCropsRef = useRef({})
+  const pendingClickRef = useRef(null)
   const [activeCrops, setActiveCrops] = useState({})
 
   useEffect(() => {
@@ -92,8 +146,39 @@ export default function FarmMap({ farm, samples, farmAnalysis, onMapClick, onMap
     map.getCanvas().style.cursor = 'crosshair'
 
     map.on('click', (e) => {
+      const { lat, lng } = e.lngLat
       if (openPopupRef.current) { openPopupRef.current.remove(); openPopupRef.current = null }
-      onMapClick(e.lngLat.lat, e.lngLat.lng)
+
+      const analysis = farmAnalysisRef.current
+      const crops = activeCropsRef.current
+      const activeCrop = analysis && Object.entries(crops).find(([, v]) => v)?.[0]
+      const cropData = activeCrop && analysis[activeCrop]
+
+      if (cropData?.scores) {
+        const score = getScoreAtPoint(lat, lng, cropData)
+        if (score !== null) {
+          const popup = new mapboxgl.Popup({ offset: 12, maxWidth: '260px', closeButton: false, closeOnClick: false })
+            .setHTML(buildSuitabilityHtml(activeCrop, score, cropData, lat, lng))
+            .setLngLat([lng, lat])
+            .addTo(map)
+          openPopupRef.current = popup
+
+          // Wire up "Add Sample Here" button after DOM renders
+          requestAnimationFrame(() => {
+            const btn = popup.getElement()?.querySelector('#suit-add-sample')
+            if (btn) {
+              btn.addEventListener('click', () => {
+                popup.remove()
+                openPopupRef.current = null
+                onMapClick(lat, lng)
+              })
+            }
+          })
+          return
+        }
+      }
+
+      onMapClick(lat, lng)
     })
 
     map.on('load', () => {
@@ -113,6 +198,10 @@ export default function FarmMap({ farm, samples, farmAnalysis, onMapClick, onMap
       openPopupRef.current = null
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep refs in sync with props/state so the one-time click handler can read current values
+  useEffect(() => { farmAnalysisRef.current = farmAnalysis }, [farmAnalysis])
+  useEffect(() => { activeCropsRef.current = activeCrops }, [activeCrops])
 
   useEffect(() => {
     const map = mapRef.current

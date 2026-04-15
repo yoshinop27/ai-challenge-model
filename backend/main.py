@@ -16,7 +16,13 @@ from backend.farm_analysis import analyze_farm  # noqa: E402
 
 app = FastAPI(title="AI Challenge API")
 
-_classifier = DualClassifier()
+_classifier = None
+
+def get_classifier():
+    global _classifier
+    if _classifier is None:
+        _classifier = DualClassifier()
+    return _classifier
 
 _cors_origins = [
     origin.strip()
@@ -48,7 +54,7 @@ async def _predict_impl(file: UploadFile, type: str, crops: str) -> dict:
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
-    result = await asyncio.to_thread(_classifier.predict, contents)
+    result = await asyncio.to_thread(get_classifier().predict, contents)
     _soil = result["soil"]
 
     try:

@@ -20,7 +20,7 @@ export default function SampleModal({ point, crops = [], onResult, onClose }) {
       body.append('file', file)
       body.append('type', uploadType)
       if (crops.length > 0) body.append('crops', crops.join(','))
-      const resp = await fetchWithTimeout('/predict', { method: 'POST', body })
+      const resp = await fetchWithTimeout('/api/predict', { method: 'POST', body })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
         throw new Error(err.detail || `Server error: ${resp.status}`)

@@ -63,7 +63,7 @@ export default function App() {
     try {
       const bounds = getBoundsRef.current?.()
       const satellite_b64 = bounds ? await fetchSatelliteBase64(bounds) : null
-      const resp = await fetchWithTimeout('/analyze-farm', {
+      const resp = await fetchWithTimeout('/api/analyze-farm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ farm, samples, crops, satellite_b64, bounds }),

@@ -1,4 +1,5 @@
 import io
+import pytest
 from PIL import Image
 from fastapi.testclient import TestClient
 
@@ -11,27 +12,28 @@ def make_dummy_image() -> bytes:
     img.save(buf, format="JPEG")
     return buf.getvalue()
 
-def test_predict_returns_200(monkeypatch):
+
+@pytest.fixture(autouse=True)
+def mock_crop_recommendations(monkeypatch):
     monkeypatch.setattr(
         "backend.main.get_crop_recommendations",
         lambda *args, **kwargs: {"mode": "generic", "summary": "", "tip": "", "good_crops": [], "avoid_crops": []},
     )
+
+
+def test_predict_returns_200():
     client = TestClient(app)
     r = client.post(
-        "/predict",
+        "/api/predict",
         files={"file": ("soil.jpg", make_dummy_image(), "image/jpeg")},
     )
     assert r.status_code == 200
 
 
-def test_predict_response_shape(monkeypatch):
-    monkeypatch.setattr(
-        "backend.main.get_crop_recommendations",
-        lambda *args, **kwargs: {"mode": "generic", "summary": "", "tip": "", "good_crops": [], "avoid_crops": []},
-    )
+def test_predict_response_shape():
     client = TestClient(app)
     r = client.post(
-        "/predict",
+        "/api/predict",
         files={"file": ("soil.jpg", make_dummy_image(), "image/jpeg")},
     )
     data = r.json()
@@ -48,5 +50,5 @@ def test_predict_response_shape(monkeypatch):
 
 def test_predict_no_file_returns_422():
     client = TestClient(app)
-    r = client.post("/predict")
+    r = client.post("/api/predict")
     assert r.status_code == 422

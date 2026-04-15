@@ -7,6 +7,7 @@ import io
 import re
 import base64
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 import numpy as np
 import urllib.request
@@ -19,29 +20,22 @@ from scipy.interpolate import RegularGridInterpolator
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
 OPENROUTER_API_KEY  = os.environ.get("OPENROUTER_API_KEY", "")
 MODEL = "anthropic/claude-opus-4-6"
-OPENROUTER_TIMEOUT_SEC = float(os.environ.get("OPENROUTER_TIMEOUT_SEC", "6"))
+OPENROUTER_TIMEOUT_SEC = float(os.environ.get("OPENROUTER_TIMEOUT_SEC", "40"))
 
-GRID_N   = 15   # Claude predicts a 15×15 score grid
-RENDER_N = 150  # Upsampled to 150×150 for smooth PNG output
-MARGIN   = 0.15 # Fractional padding around farm bounds
+GRID_N   = 15
+RENDER_N = 150
+MARGIN   = 0.15
 
-# Diverging red→transparent→green colormap.
-# Score 0   = dark red,   fully opaque   (confident: bad)
-# Score 50  = transparent white          (uncertain: satellite shows through)
-# Score 100 = dark green, fully opaque   (confident: good)
-# Alpha varies with distance from 50 so uncertain areas fade away.
 _CMAP = LinearSegmentedColormap.from_list("farm_suit", [
-    (0.62, 0.04, 0.04, 1.00),  # score   0 – dark red, solid
-    (0.90, 0.25, 0.25, 0.80),  # score  17
-    (0.97, 0.60, 0.60, 0.30),  # score  33 – light red, fading
-    (1.00, 1.00, 1.00, 0.04),  # score  50 – nearly transparent
-    (0.60, 0.92, 0.60, 0.30),  # score  67 – light green, fading
-    (0.18, 0.70, 0.18, 0.80),  # score  83
-    (0.03, 0.38, 0.03, 1.00),  # score 100 – dark green, solid
+    (0.62, 0.04, 0.04, 1.00),
+    (0.90, 0.25, 0.25, 0.80),
+    (0.97, 0.60, 0.60, 0.30),
+    (1.00, 1.00, 1.00, 0.04),
+    (0.60, 0.92, 0.60, 0.30),
+    (0.18, 0.70, 0.18, 0.80),
+    (0.03, 0.38, 0.03, 1.00),
 ])
 
-
-# ── Data fetching ────────────────────────────────────────────────────────────
 
 def _fetch_weather(lat: float, lng: float) -> str:
     url = (
@@ -64,7 +58,6 @@ def _fetch_weather(lat: float, lng: float) -> str:
 
 
 def _fetch_forecast_summary(lat: float, lng: float) -> str:
-    """Return a compact summary of the 5-day/3-hour forecast from OpenWeather."""
     url = (
         f"https://api.openweathermap.org/data/2.5/forecast"
         f"?lat={lat}&lon={lng}&appid={OPENWEATHER_API_KEY}&units=metric&cnt=40"
@@ -74,7 +67,6 @@ def _fetch_forecast_summary(lat: float, lng: float) -> str:
     entries = d.get("list", [])
     if not entries:
         return "No forecast available"
-    # Summarise by day: min/max temp, dominant condition, total rain
     from collections import defaultdict
     days: dict = defaultdict(lambda: {"temps": [], "conds": [], "rain": 0.0})
     for entry in entries:
@@ -108,8 +100,6 @@ def _fetch_elevation(lat_grid: np.ndarray, lng_grid: np.ndarray) -> np.ndarray:
     return elevations.reshape(lat_grid.shape)
 
 
-# ── Grid bounds ──────────────────────────────────────────────────────────────
-
 def _farm_bounds(farm: dict, n: int, bounds: dict | None = None):
     """Return (lats, lngs, lat_min, lat_max, lng_min, lng_max) for an n×n grid."""
     if bounds:
@@ -128,8 +118,6 @@ def _farm_bounds(farm: dict, n: int, bounds: dict | None = None):
     lngs = np.linspace(lng_min, lng_max, n)
     return lats, lngs, lat_min, lat_max, lng_min, lng_max
 
-
-# ── Claude call ──────────────────────────────────────────────────────────────
 
 def _call_claude(system: str, user_content: list | str, max_tokens: int = 4096) -> str:
     content = user_content if isinstance(user_content, list) else [{"type": "text", "text": user_content}]
@@ -154,10 +142,22 @@ def _call_claude(system: str, user_content: list | str, max_tokens: int = 4096) 
     with urllib.request.urlopen(req, timeout=OPENROUTER_TIMEOUT_SEC) as r:
         body = json.loads(r.read())
     raw = body["choices"][0]["message"]["content"].strip()
-    # Strip markdown code fences if present
     raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
     raw = re.sub(r'\s*```$', '', raw, flags=re.MULTILINE)
     return raw.strip()
+
+
+def _parse_json_with_fallback(raw: str, empty: dict) -> dict:
+    try:
+        return json.loads(raw)
+    except Exception:
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except Exception:
+                pass
+        return empty
 
 
 def _build_messages(farm, samples, crop, weather, elev_grid, lats, lngs, satellite_b64):
@@ -187,10 +187,8 @@ def _build_messages(farm, samples, crop, weather, elev_grid, lats, lngs, satelli
             moist_lbl = r.get('moisture', {}).get('label', 'unknown')
             return (f"  ({s['lat']:.5f}, {s['lng']:.5f}): "
                     f"soil={soil_lbl} ({soil_conf:.0f}%), moisture={moist_lbl}")
-        else:
-            # Tabular / CSV sample — has quality label only
-            return (f"  ({s['lat']:.5f}, {s['lng']:.5f}): "
-                    f"quality={r.get('label','unknown')} (CSV lab data)")
+        return (f"  ({s['lat']:.5f}, {s['lng']:.5f}): "
+                f"quality={r.get('label','unknown')} (CSV lab data)")
 
     sample_lines = "\n".join(_fmt_sample(s) for s in samples)
 
@@ -222,8 +220,6 @@ def _build_messages(farm, samples, crop, weather, elev_grid, lats, lngs, satelli
     return system, user_content
 
 
-# ── Contour rendering ────────────────────────────────────────────────────────
-
 def _render_contour(scores: np.ndarray, lat_min, lat_max, lng_min, lng_max) -> str:
     """Upsample scores and render topographic contour PNG, return base64."""
     n = scores.shape[0]
@@ -253,8 +249,6 @@ def _render_contour(scores: np.ndarray, lat_min, lat_max, lng_min, lng_max) -> s
     plt.close(fig)
     return base64.b64encode(buf.getvalue()).decode()
 
-
-# ── Timeline generation ──────────────────────────────────────────────────────
 
 _TIMELINE_SYSTEM = """\
 You are an expert agronomist specialising in Midwest US farming. Given a farm's location,
@@ -307,16 +301,7 @@ def get_farm_timeline(
     )
 
     raw = _call_claude(_TIMELINE_SYSTEM, user_text, max_tokens=5000)
-    try:
-        return json.loads(raw)
-    except Exception:
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except Exception:
-                pass
-        return {"weather_outlook": "", "summary": "", "phases": []}
+    return _parse_json_with_fallback(raw, {"weather_outlook": "", "summary": "", "phases": []})
 
 
 def _sample_crop_score(sample: dict, crop: str) -> float:
@@ -452,7 +437,43 @@ def _fallback_timeline(farm: dict, crops: list[str], current_weather: str) -> di
     }
 
 
-# ── Public entry point ───────────────────────────────────────────────────────
+def _analyze_crop(crop, farm, samples, weather, elev_grid, lats, lngs, satellite_b64, lat_min, lat_max, lng_min, lng_max):
+    raw = ""
+    try:
+        system, user_content = _build_messages(
+            farm, samples, crop, weather, elev_grid, lats, lngs, satellite_b64
+        )
+        raw = _call_claude(system, user_content)
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = _parse_json_with_fallback(raw, {})
+
+    raw_scores = parsed.get("scores")
+    try:
+        scores = np.clip(np.array(raw_scores, dtype=float), 0, 100)
+        if scores.shape != (GRID_N, GRID_N):
+            raise ValueError("Invalid score grid shape")
+    except Exception:
+        scores = _fallback_scores(samples, crop, lats, lngs)
+
+    summary, good_reason, poor_reason = _fallback_crop_text(crop, scores, samples)
+    image_b64 = _render_contour(scores, lat_min, lat_max, lng_min, lng_max)
+
+    return crop, {
+        "image": image_b64,
+        "coordinates": [
+            [lng_min, lat_max],
+            [lng_max, lat_max],
+            [lng_max, lat_min],
+            [lng_min, lat_min],
+        ],
+        "scores": scores.tolist(),
+        "avg_score": float(np.mean(scores)),
+        "summary": parsed.get("summary") or summary,
+        "good_reason": parsed.get("good_reason") or good_reason,
+        "poor_reason": parsed.get("poor_reason") or poor_reason,
+    }
+
 
 def analyze_farm(farm: dict, samples: list, crops: list, satellite_b64: str | None = None, bounds: dict | None = None) -> dict:
     """
@@ -461,62 +482,36 @@ def analyze_farm(farm: dict, samples: list, crops: list, satellite_b64: str | No
     lats, lngs, lat_min, lat_max, lng_min, lng_max = _farm_bounds(farm, GRID_N, bounds)
     LAT_GRID, LNG_GRID = np.meshgrid(lats, lngs, indexing="ij")
 
-    try:
-        weather = _fetch_weather(farm["lat"], farm["lng"])
-    except Exception:
-        weather = "Weather data unavailable"
+    lat, lng = farm["lat"], farm["lng"]
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        f_weather  = ex.submit(_fetch_weather, lat, lng)
+        f_forecast = ex.submit(_fetch_forecast_summary, lat, lng)
+        f_elev     = ex.submit(_fetch_elevation, LAT_GRID, LNG_GRID)
 
-    try:
-        forecast = _fetch_forecast_summary(farm["lat"], farm["lng"])
-    except Exception:
-        forecast = "Forecast data unavailable"
+        try:
+            weather = f_weather.result()
+        except Exception:
+            weather = "Weather data unavailable"
 
-    try:
-        elev_grid = _fetch_elevation(LAT_GRID, LNG_GRID)
-    except Exception:
-        elev_grid = np.zeros((GRID_N, GRID_N))
+        try:
+            forecast = f_forecast.result()
+        except Exception:
+            forecast = "Forecast data unavailable"
+
+        try:
+            elev_grid = f_elev.result()
+        except Exception:
+            elev_grid = np.zeros((GRID_N, GRID_N))
 
     result = {}
-    for crop in crops:
-        raw = ""
-        try:
-            system, user_content = _build_messages(
-                farm, samples, crop, weather, elev_grid, lats, lngs, satellite_b64
-            )
-            raw = _call_claude(system, user_content)
-            parsed = json.loads(raw)
-        except Exception:
-            try:
-                match = re.search(r'\{.*\}', raw, re.DOTALL)
-                parsed = json.loads(match.group()) if match else {}
-            except Exception:
-                parsed = {}
-
-        raw_scores = parsed.get("scores")
-        try:
-            scores = np.clip(np.array(raw_scores, dtype=float), 0, 100)
-            if scores.shape != (GRID_N, GRID_N):
-                raise ValueError("Invalid score grid shape")
-        except Exception:
-            scores = _fallback_scores(samples, crop, lats, lngs)
-
-        summary, good_reason, poor_reason = _fallback_crop_text(crop, scores, samples)
-        image_b64 = _render_contour(scores, lat_min, lat_max, lng_min, lng_max)
-
-        result[crop] = {
-            "image": image_b64,
-            "coordinates": [
-                [lng_min, lat_max],
-                [lng_max, lat_max],
-                [lng_max, lat_min],
-                [lng_min, lat_min],
-            ],
-            "scores": scores.tolist(),
-            "avg_score": float(np.mean(scores)),
-            "summary": parsed.get("summary") or summary,
-            "good_reason": parsed.get("good_reason") or good_reason,
-            "poor_reason": parsed.get("poor_reason") or poor_reason,
+    with ThreadPoolExecutor(max_workers=len(crops) or 1) as ex:
+        futures = {
+            ex.submit(_analyze_crop, crop, farm, samples, weather, elev_grid, lats, lngs, satellite_b64, lat_min, lat_max, lng_min, lng_max): crop
+            for crop in crops
         }
+        for future in as_completed(futures):
+            crop_name, crop_data = future.result()
+            result[crop_name] = crop_data
 
     try:
         timeline = get_farm_timeline(farm, samples, crops, forecast, weather)

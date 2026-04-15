@@ -1,17 +1,10 @@
-import pytest
 import numpy as np
-from httpx import AsyncClient, ASGITransport
+from fastapi.testclient import TestClient
 
 from backend.main import app
 
 
-@pytest.fixture
-def transport():
-    return ASGITransport(app=app)
-
-
-@pytest.mark.asyncio
-async def test_analyze_farm_returns_fallback_when_llm_unavailable(monkeypatch, transport):
+def test_analyze_farm_returns_fallback_when_llm_unavailable(monkeypatch):
     monkeypatch.setattr("backend.farm_analysis._fetch_weather", lambda lat, lng: "Clear, 20C")
     monkeypatch.setattr("backend.farm_analysis._fetch_forecast_summary", lambda lat, lng: "Dry week ahead")
     monkeypatch.setattr("backend.farm_analysis._fetch_elevation", lambda lat_grid, lng_grid: np.zeros((15, 15)))
@@ -71,8 +64,8 @@ async def test_analyze_farm_returns_fallback_when_llm_unavailable(monkeypatch, t
         "bounds": {"west": -93.11, "south": 41.87, "east": -93.09, "north": 41.89},
     }
 
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/analyze-farm", json=payload)
+    client = TestClient(app)
+    response = client.post("/analyze-farm", json=payload)
 
     assert response.status_code == 200
     data = response.json()

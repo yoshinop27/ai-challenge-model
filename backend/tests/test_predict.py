@@ -1,7 +1,7 @@
 import io
-import pytest
 from PIL import Image
-from httpx import AsyncClient, ASGITransport
+from fastapi.testclient import TestClient
+
 from backend.main import app
 
 
@@ -11,38 +11,42 @@ def make_dummy_image() -> bytes:
     img.save(buf, format="JPEG")
     return buf.getvalue()
 
-
-@pytest.fixture
-def transport():
-    return ASGITransport(app=app)
-
-
-@pytest.mark.asyncio
-async def test_predict_returns_200(transport):
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        r = await client.post(
-            "/predict",
-            files={"file": ("soil.jpg", make_dummy_image(), "image/jpeg")},
-        )
+def test_predict_returns_200(monkeypatch):
+    monkeypatch.setattr(
+        "backend.main.get_crop_recommendations",
+        lambda *args, **kwargs: {"mode": "generic", "summary": "", "tip": "", "good_crops": [], "avoid_crops": []},
+    )
+    client = TestClient(app)
+    r = client.post(
+        "/predict",
+        files={"file": ("soil.jpg", make_dummy_image(), "image/jpeg")},
+    )
     assert r.status_code == 200
 
 
-@pytest.mark.asyncio
-async def test_predict_response_shape(transport):
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        r = await client.post(
-            "/predict",
-            files={"file": ("soil.jpg", make_dummy_image(), "image/jpeg")},
-        )
+def test_predict_response_shape(monkeypatch):
+    monkeypatch.setattr(
+        "backend.main.get_crop_recommendations",
+        lambda *args, **kwargs: {"mode": "generic", "summary": "", "tip": "", "good_crops": [], "avoid_crops": []},
+    )
+    client = TestClient(app)
+    r = client.post(
+        "/predict",
+        files={"file": ("soil.jpg", make_dummy_image(), "image/jpeg")},
+    )
     data = r.json()
-    assert "label" in data
-    assert data["label"] in ["bad", "average", "good"]
-    assert "confidence" in data
-    assert set(data["confidence"].keys()) == {"bad", "average", "good"}
+    assert "soil" in data
+    assert "moisture" in data
+    assert "label" in data["soil"]
+    assert "confidence" in data["soil"]
+    assert data["soil"]["label"] in data["soil"]["confidence"]
+    assert "label" in data["moisture"]
+    assert "confidence" in data["moisture"]
+    assert data["moisture"]["label"] in data["moisture"]["confidence"]
+    assert "recommendations" in data
 
 
-@pytest.mark.asyncio
-async def test_predict_no_file_returns_422(transport):
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        r = await client.post("/predict")
+def test_predict_no_file_returns_422():
+    client = TestClient(app)
+    r = client.post("/predict")
     assert r.status_code == 422

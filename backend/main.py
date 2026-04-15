@@ -1,14 +1,11 @@
 import asyncio
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
-from fastapi.responses import FileResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 from backend.model import DualClassifier  # noqa: E402
 from backend.llm import predict_tabular, get_crop_recommendations  # noqa: E402
@@ -101,11 +98,3 @@ async def _analyze_farm_impl(body: AnalyzeFarmRequest) -> dict:
 async def analyze_farm_api_endpoint(body: AnalyzeFarmRequest) -> dict:
     return await _analyze_farm_impl(body)
 
-
-_FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
-if _FRONTEND_DIST.is_dir():
-    app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST / "assets"), name="assets")
-
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(_: str):
-        return FileResponse(_FRONTEND_DIST / "index.html")

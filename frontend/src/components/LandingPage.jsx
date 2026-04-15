@@ -9,7 +9,7 @@ export default function LandingPage({ onEnter }) {
           <p className="landing-tagline">AI-Powered Soil Quality Mapping for Iowa Farmers</p>
           <p className="landing-sub">Addressing Iowa's Farm Debt Crisis Through Precision Agriculture</p>
           <div className="landing-btn-grid" style={{ marginTop: '2.5rem' }}>
-            <a href="#demo" className="landing-btn landing-btn-outline">Watch a Demo</a>
+            <a href="https://www.loom.com/share/0d09d502dfbc43289dd1312ca1550df5" target="_blank" rel="noreferrer" className="landing-btn landing-btn-outline">Watch a Demo</a>
             <a href="#ethics" className="landing-btn landing-btn-outline">Ethical &amp; Inclusive Design</a>
             <a href="#impact" className="landing-btn landing-btn-outline">Impact Analysis</a>
             <button className="landing-btn landing-btn-primary" onClick={onEnter}>

@@ -18,7 +18,6 @@ export default function CropPanel({ crops, onChange }) {
 
   return (
     <div className="crop-panel">
-      <p className="crop-panel-label">Considering planting</p>
       <div className="crop-input-row">
         <input
           className="crop-input"

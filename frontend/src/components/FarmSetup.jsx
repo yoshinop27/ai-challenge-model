@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CropPanel from './CropPanel'
 
 function validate(fields) {
   const errors = {}
@@ -20,29 +21,18 @@ export default function FarmSetup({ onSubmit }) {
   const [fields, setFields] = useState({ farmSize: '', lat: '', lng: '' })
   const [errors, setErrors] = useState({})
   const [crops, setCrops] = useState([])
-  const [cropInput, setCropInput] = useState('')
+  const [cropError, setCropError] = useState(null)
 
   const handleChange = (name) => (e) =>
     setFields((prev) => ({ ...prev, [name]: e.target.value }))
-
-  const addCrop = () => {
-    const val = cropInput.trim()
-    if (!val || crops.includes(val)) { setCropInput(''); return }
-    setCrops((prev) => [...prev, val])
-    setCropInput('')
-  }
-
-  const removeCrop = (crop) => setCrops((prev) => prev.filter((c) => c !== crop))
-
-  const handleCropKey = (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); addCrop() }
-  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
     const errs = validate(fields)
     setErrors(errs)
-    if (Object.keys(errs).length > 0) return
+    const cropErr = crops.length === 0 ? 'Add at least one crop of interest' : null
+    setCropError(cropErr)
+    if (Object.keys(errs).length > 0 || cropErr) return
     onSubmit({
       lat: Number(fields.lat),
       lng: Number(fields.lng),
@@ -103,28 +93,9 @@ export default function FarmSetup({ onSubmit }) {
           </div>
 
           <div className="field">
-            <label className="field-label" htmlFor="setup-crop">Crops of Interest (optional)</label>
-            <div className="crop-input-row">
-              <input
-                id="setup-crop"
-                className="crop-input"
-                placeholder="e.g. Cotton"
-                value={cropInput}
-                onChange={(e) => setCropInput(e.target.value)}
-                onKeyDown={handleCropKey}
-              />
-              <button className="crop-add-btn" onClick={addCrop} type="button">+</button>
-            </div>
-            {crops.length > 0 && (
-              <div className="crop-chips">
-                {crops.map((c) => (
-                  <span key={c} className="crop-chip">
-                    {c}
-                    <button className="crop-chip-remove" onClick={() => removeCrop(c)} type="button">×</button>
-                  </span>
-                ))}
-              </div>
-            )}
+            <label className="field-label">Crops of Interest</label>
+            <CropPanel crops={crops} onChange={(c) => { setCrops(c); if (c.length > 0) setCropError(null) }} />
+            {cropError && <p className="field-error">{cropError}</p>}
           </div>
 
           <button type="submit" className="submit-btn">View My Farm</button>

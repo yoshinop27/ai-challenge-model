@@ -1,1 +1,1 @@
-web: MPLCONFIGDIR=/tmp/matplotlib PORT=${PORT:-8000} uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
+web: MPLCONFIGDIR=/tmp/matplotlib PORT=${PORT:-8000} python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}

@@ -2,22 +2,13 @@ import asyncio
 import os
 from pathlib import Path
 
-
-def _load_dotenv() -> None:
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.is_file():
-        return
-    for line in env_path.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip())
-
-
-_load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 from backend.model import DualClassifier  # noqa: E402
 from backend.llm import predict_tabular, get_crop_recommendations  # noqa: E402
@@ -47,12 +38,7 @@ def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/predict")
-async def predict(
-    file: UploadFile = File(...),
-    type: str = Form("image"),
-    crops: str = Form(""),
-) -> dict:
+async def _predict_impl(file: UploadFile, type: str, crops: str) -> dict:
     contents = await file.read()
     crop_list = [c.strip() for c in crops.split(",") if c.strip()]
 
@@ -79,6 +65,15 @@ async def predict(
     return result
 
 
+@app.post("/api/predict")
+async def predict_api(
+    file: UploadFile = File(...),
+    type: str = Form("image"),
+    crops: str = Form(""),
+) -> dict:
+    return await _predict_impl(file, type, crops)
+
+
 class AnalyzeFarmRequest(BaseModel):
     farm: dict
     samples: list[dict]
@@ -87,11 +82,24 @@ class AnalyzeFarmRequest(BaseModel):
     bounds: dict | None = None
 
 
-@app.post("/analyze-farm")
-async def analyze_farm_endpoint(body: AnalyzeFarmRequest) -> dict:
+async def _analyze_farm_impl(body: AnalyzeFarmRequest) -> dict:
     try:
         return await asyncio.to_thread(
             analyze_farm, body.farm, body.samples, body.crops, body.satellite_b64, body.bounds
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/analyze-farm")
+async def analyze_farm_api_endpoint(body: AnalyzeFarmRequest) -> dict:
+    return await _analyze_farm_impl(body)
+
+
+_FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+if _FRONTEND_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(_: str):
+        return FileResponse(_FRONTEND_DIST / "index.html")

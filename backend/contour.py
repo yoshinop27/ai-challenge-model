@@ -1,7 +1,3 @@
-"""
-Compute per-crop smooth heatmap rasters from sample points using CloughTocher2D interpolation.
-Returns base64 PNG images with bounding coordinates for Mapbox image sources.
-"""
 import io
 import base64
 import numpy as np
@@ -12,7 +8,6 @@ from matplotlib.colors import LinearSegmentedColormap
 _MARGIN = 0.1
 _GRID_SIZE = 200
 
-# grey/white → light green → dark green
 _CMAP = LinearSegmentedColormap.from_list(
     'soil_suitability',
     [(0.82, 0.84, 0.86), (0.53, 0.94, 0.67), (0.08, 0.50, 0.24)],
@@ -36,9 +31,7 @@ def _to_raster(Z: np.ndarray) -> str:
     """Convert interpolated grid to RGBA PNG (NaN = transparent), return as base64."""
     Z_norm = np.clip(Z / 100.0, 0.0, 1.0)
     rgba = (_CMAP(Z_norm) * 255).astype(np.uint8)
-    # NaN regions → fully transparent
     rgba[np.isnan(Z), 3] = 0
-    # Flip vertically: matplotlib origin is bottom-left, image origin is top-left
     img = Image.fromarray(np.flipud(rgba), 'RGBA')
     buf = io.BytesIO()
     img.save(buf, format='PNG')
@@ -48,12 +41,7 @@ def _to_raster(Z: np.ndarray) -> str:
 def compute_contours(samples: list[dict]) -> dict:
     """
     samples: [{"lat": float, "lng": float, "scores": {"CropA": float, ...}}]
-    Returns: {
-      "CropA": {
-        "image": "<base64 PNG>",
-        "coordinates": [[lng,lat] x4]  # top-left, top-right, bottom-right, bottom-left
-      }
-    }
+    Returns: {"CropA": {"image": "<base64 PNG>", "coordinates": [[lng,lat] x4]}}
     """
     crops = {crop for s in samples for crop in s.get("scores", {})}
     result = {}
@@ -70,10 +58,10 @@ def compute_contours(samples: list[dict]) -> dict:
         result[crop] = {
             "image": _to_raster(Z),
             "coordinates": [
-                [float(xi[0]),  float(yi[-1])],   # top-left
-                [float(xi[-1]), float(yi[-1])],   # top-right
-                [float(xi[-1]), float(yi[0])],    # bottom-right
-                [float(xi[0]),  float(yi[0])],    # bottom-left
+                [float(xi[0]),  float(yi[-1])],
+                [float(xi[-1]), float(yi[-1])],
+                [float(xi[-1]), float(yi[0])],
+                [float(xi[0]),  float(yi[0])],
             ],
         }
 

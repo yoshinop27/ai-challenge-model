@@ -11,3 +11,9 @@ export const MOISTURE_COLORS = {
 }
 
 export const FALLBACK_COLOR = '#6366f1'
+
+export const CROP_SUITABILITY_COLORS = {
+  good:    '#4ade80',
+  average: '#fbbf24',
+  bad:     '#f87171',
+}

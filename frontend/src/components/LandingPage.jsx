@@ -1,7 +1,6 @@
 export default function LandingPage({ onEnter }) {
   return (
     <div className="landing">
-      {/* ── Hero ── */}
       <div className="landing-hero">
         <div className="landing-hero-inner">
           <span className="landing-badge">Pi515 AI Challenge 2026 &nbsp;·&nbsp; Grinnell AI</span>
@@ -22,7 +21,6 @@ export default function LandingPage({ onEnter }) {
         <div className="landing-orb landing-orb-2" />
       </div>
 
-      {/* ── Description ── */}
       <div className="landing-section">
         <h2 className="landing-section-title">Point. Scan. Know.</h2>
         <p className="landing-body">
@@ -37,7 +35,6 @@ export default function LandingPage({ onEnter }) {
         </p>
       </div>
 
-      {/* ── Stats ── */}
       <div className="landing-stats">
         <div className="landing-stat">
           <span className="landing-stat-value">$1.8M+</span>
@@ -53,7 +50,6 @@ export default function LandingPage({ onEnter }) {
         </div>
       </div>
 
-      {/* ── How it works ── */}
       <div className="landing-section">
         <p className="landing-eyebrow">Our Solution</p>
         <h2 className="landing-section-title">How SoilSense Works</h2>
@@ -78,7 +74,6 @@ export default function LandingPage({ onEnter }) {
         </div>
       </div>
 
-      {/* ── Ethical & Inclusive Design ── */}
       <div id="ethics" className="landing-wide-section">
         <div className="landing-wide-inner">
           <p className="landing-eyebrow">Design Principles</p>
@@ -113,14 +108,12 @@ export default function LandingPage({ onEnter }) {
         </div>
       </div>
 
-      {/* ── Impact & Feasibility ── */}
       <div id="impact" className="landing-wide-section landing-wide-section--alt">
         <div className="landing-wide-inner">
           <p className="landing-eyebrow">Why It Matters</p>
           <h2 className="landing-section-title">Impact &amp; Feasibility</h2>
           <div className="landing-wide-divider" />
           <div className="landing-impact-grid">
-            {/* Panel 1 — Per-Farm Economic */}
             <div className="landing-impact-panel">
               <h3 className="landing-impact-head">Per-Farm Economic Impact <span className="landing-impact-sub">(359-acre corn operation)</span></h3>
               <table className="landing-impact-table">
@@ -138,7 +131,6 @@ export default function LandingPage({ onEnter }) {
               </table>
             </div>
 
-            {/* Panel 2 — Environmental */}
             <div className="landing-impact-panel">
               <h3 className="landing-impact-head">Environmental Impact</h3>
               <ul className="landing-ethics-list">
@@ -149,7 +141,6 @@ export default function LandingPage({ onEnter }) {
               </ul>
             </div>
 
-            {/* Panel 3 — State-Level */}
             <div className="landing-impact-panel">
               <h3 className="landing-impact-head">State-Level Projection <span className="landing-impact-sub">(Iowa — 86,911 farms)</span></h3>
               <table className="landing-impact-table">
@@ -167,7 +158,6 @@ export default function LandingPage({ onEnter }) {
               </table>
             </div>
 
-            {/* Panel 4 — Scalability */}
             <div className="landing-impact-panel">
               <h3 className="landing-impact-head">Scalability</h3>
               <ul className="landing-ethics-list">
@@ -189,7 +179,6 @@ export default function LandingPage({ onEnter }) {
         </div>
       </div>
 
-      {/* ── Footer ── */}
       <footer className="landing-footer">
         SoilSense · Grinnell AI · Pi515 AI Challenge 2026 · Phase 3 Final Presentation · April 2026
       </footer>

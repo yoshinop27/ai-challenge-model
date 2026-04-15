@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { SOIL_COLORS, MOISTURE_COLORS, FALLBACK_COLOR } from '../utils/constants'
+import { SOIL_COLORS, MOISTURE_COLORS, FALLBACK_COLOR, CROP_SUITABILITY_COLORS } from '../utils/constants'
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -33,10 +33,8 @@ function buildPopupHtml(sample, color) {
   const e = escapeHtml
   const result = sample.result
 
-  // Tabular CSV result — flat {label, confidence} shape
   if (!result.soil) {
-    const qualityColors = { good: '#4ade80', average: '#fbbf24', bad: '#f87171' }
-    const labelColor = qualityColors[result.label] ?? color
+    const labelColor = CROP_SUITABILITY_COLORS[result.label] ?? color
     return `<div class="marker-popup">
       <span class="popup-section-title">Soil Quality (CSV)</span>
       <span class="popup-label" style="color:${e(labelColor)}">${e(result.label)}</span>
@@ -45,7 +43,6 @@ function buildPopupHtml(sample, color) {
     </div>`
   }
 
-  // Image result — {soil, moisture, recommendations} shape
   const soil = result.soil
   const moisture = result.moisture
   const soilConf = (soil.confidence[soil.label] * 100).toFixed(1)
@@ -163,7 +160,6 @@ export default function FarmMap({ farm, samples, farmAnalysis, onMapClick, onMap
             .addTo(map)
           openPopupRef.current = popup
 
-          // Wire up "Add Sample Here" button after DOM renders
           requestAnimationFrame(() => {
             const btn = popup.getElement()?.querySelector('#suit-add-sample')
             if (btn) {
@@ -199,7 +195,6 @@ export default function FarmMap({ farm, samples, farmAnalysis, onMapClick, onMap
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep refs in sync with props/state so the one-time click handler can read current values
   useEffect(() => { farmAnalysisRef.current = farmAnalysis }, [farmAnalysis])
   useEffect(() => { activeCropsRef.current = activeCrops }, [activeCrops])
 
